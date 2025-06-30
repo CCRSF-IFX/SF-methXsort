@@ -1,0 +1,9 @@
+# config.yaml for sim_bs_reads_sherman.smk
+hg38: /mnt/ccrsf-ifx/RefGenomes/SingleCell_REF/10X/hg38/refdata-gex-GRCh38-2024-A/fasta/genome.fa
+mm10: /mnt/ccrsf-ifx/RefGenomes/mm10_all/mm10.fdb.fa
+outdir: /mnt/ccrsf-static/illumina/RnD_methXsort/results/test/test_bbsplit/sherman_reads_1M/
+read_pair_number: 100000  # Number of read pairs to simulate
+
+
+bbsplit_idx_path: /mnt/ccrsf-static/illumina/RnD_methXsort/results/test/test_bbsplit/bbsplit_idx_convert
+bbsplit_idx: 1
