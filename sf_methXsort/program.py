@@ -1,0 +1,1 @@
+methXsort_env_path = "/mnt/ccrsf-ifx/Software/tools/methXsort/v0.1.0"
