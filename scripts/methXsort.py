@@ -8,6 +8,7 @@ import os
 from itertools import groupby
 import gzip
 import pysam
+from multiprocessing import Pool, cpu_count
 
 def wrap(seq, width=60):
     return [seq[i:i+width] for i in range(0, len(seq), width)]
@@ -135,7 +136,7 @@ def bam_to_fastq_with_original_seq(bamfile, out1, out2=None):
             orig_seq = None
             if "ORIGINAL_SEQ:" in read.query_name:
                 # e.g. @name ORIGINAL_SEQ:ACGT...
-                parts = read.query_name.split("ORIGINAL_SEQ:")
+                parts = read.query_name.split(" ORIGINAL_SEQ:")
                 if len(parts) > 1:
                     orig_seq = parts[1].strip()
             # If not found, use N's of the same length as the read
@@ -152,6 +153,123 @@ def bam_to_fastq_with_original_seq(bamfile, out1, out2=None):
     fq1.close()
     if fq2:
         fq2.close()
+
+def process_chunk(records):
+    out = []
+    for header, seq, plus, qual in records:
+        header = header.rstrip() + f" ORIGINAL_SEQ:{seq.strip()}\n"
+        seq = seq.replace("C", "T").replace("c", "t")
+        out.extend([header, seq, plus, qual])
+    return out
+
+def read_fastq_chunk(fh, chunk_size):
+    records = []
+    for _ in range(chunk_size):
+        header = fh.readline()
+        if not header:
+            break
+        seq = fh.readline()
+        plus = fh.readline()
+        qual = fh.readline()
+        records.append((header, seq, plus, qual))
+    return records
+
+def process_chunk_r1(records):
+    out = []
+    for header, seq, plus, qual in records:
+        header = header.rstrip() + f" ORIGINAL_SEQ:{seq.strip()}\n"
+        seq = seq.replace("C", "T").replace("c", "t")
+        out.extend([header, seq, plus, qual])
+    return out
+
+def process_chunk_r2(records):
+    out = []
+    for header, seq, plus, qual in records:
+        header = header.rstrip() + f" ORIGINAL_SEQ:{seq.strip()}\n"
+        seq = seq.replace("G", "A").replace("g", "a")
+        out.extend([header, seq, plus, qual])
+    return out
+
+def parallel_convert_fastq(infile, outfile, chunk_size=100000, mode="r1"):
+    opener = gzip.open if infile.endswith('.gz') else open
+    process_chunk = process_chunk_r1 if mode == "r1" else process_chunk_r2
+    with opener(infile, 'rt') as fh, gzip.open(outfile, 'wt') if outfile.endswith('.gz') else open(outfile, 'w') as out_fh:
+        pool = Pool(cpu_count())
+        while True:
+            chunk = read_fastq_chunk(fh, chunk_size)
+            if not chunk:
+                break
+            results = pool.map(process_chunk, [chunk])
+            for recs in results:
+                out_fh.writelines(recs)
+        pool.close()
+        pool.join()
+
+def process_bam_chunk(records):
+    out = []
+    for read in records:
+        if read.is_unmapped:
+            continue
+        parts = [read.query_name]
+        # Try to extract original sequence from header
+        orig_seq = None
+        if "ORIGINAL_SEQ:" in read.query_name:
+            parts = read.query_name.split(" ORIGINAL_SEQ:")
+            if len(parts) > 1:
+                orig_seq = parts[1].strip()
+        if not orig_seq or orig_seq == "":
+            orig_seq = "N" * read.query_length
+        fq_entry = f"@{parts[0]}\n{orig_seq}\n+\n"
+        qual = read.qual if read.qual else "I" * read.query_length
+        if read.is_reverse:
+            qual = qual[::-1]
+        fq_entry += f"{qual}\n"
+        out.append((read.is_read1, fq_entry))
+    return out
+
+def read_bam_chunk(bam, chunk_size):
+    records = []
+    try:
+        for _ in range(chunk_size):
+            read = next(bam)
+            records.append(read)
+    except StopIteration:
+        pass
+    return records
+
+def parallel_bam_to_fastq(bamfile, out1, out2=None, chunk_size=100000):
+    def open_out(filename):
+        if filename and filename.endswith('.gz'):
+            return gzip.open(filename, "wt")
+        else:
+            return open(filename, "w")
+
+    fq1 = open_out(out1)
+    fq2 = open_out(out2) if out2 else None
+
+    with pysam.AlignmentFile(bamfile, "rb") as bam:
+        pool = Pool(cpu_count())
+        while True:
+            chunk = read_bam_chunk(bam, chunk_size)
+            if not chunk:
+                break
+            results = pool.map(process_bam_chunk, [chunk])
+            for recs in results:
+                for is_read1, fq_entry in recs:
+                    if is_read1:
+                        fq1.write(fq_entry)
+                    elif fq2:
+                        fq2.write(fq_entry)
+                    else:
+                        fq1.write(fq_entry)
+        pool.close()
+        pool.join()
+    fq1.close()
+    if fq2:
+        fq2.close()
+
+# Usage:
+# parallel_convert_fastq("input.fastq.gz", "output.fastq.gz")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sort reads into host and graft categories")
@@ -182,6 +300,11 @@ if __name__ == "__main__":
         out_fa = convert_fasta(args.ref_fasta, out_fa=out_fa)
         print(out_fa)
     elif args.command == "convert-reads":
-        convert_reads_c2t_r1_g2a_r2(args.read, args.read2, args.out, args.out2)
+        #convert_reads_c2t_r1_g2a_r2(args.read, args.read2, args.out, args.out2)
+        parallel_convert_fastq(args.read, args.out, mode="r1")
+        if args.read2 and args.out2:
+            parallel_convert_fastq(args.read2, args.out2, mode="r2")
     elif args.command == "bam-to-fastq":
-        bam_to_fastq_with_original_seq(args.bamfile, args.out, args.out2)
+        #bam_to_fastq_with_original_seq(args.bamfile, args.out, args.out2)
+        parallel_bam_to_fastq(args.bamfile, args.out, args.out2)
+
