@@ -44,8 +44,6 @@ except:
 report_result = one_up + "/" + project_name + "_" + flowcell + ".xlsx"
 wreport_result = one_up + "/" + project_name + "_" + flowcell + ".docx"
 copy_result = one_up + "/" + project_name + "_" + flowcell + "_copy.txt"
-bamTarFile = one_up + "/" + project_name + "_" + flowcell + ".analysis.tar"
-fastqTarFile = one_up + "/" + project_name + "_" + flowcell + ".fastq.tar"
 
 if hasattr(config, 'forcestrand'):
 	forcestrand = config.forcestrand
@@ -69,13 +67,15 @@ for item in samps:
         if '_R2_' not in item:
                 new.append(item)
 samples = [s.replace('Sample_', '') for s in new]
-
+print(samples)
 with open(config.analysis + '/cluster.json') as file:
     clusterConfig = json.load(file)
 
 rule all:
     input: 
         expand("Sample_{sample}/{sample}_read_number.txt", sample=samples), 
+        one_up + "/meta2json_complete.txt",
+        
         
 rule convert_reads:
     input: 
@@ -87,7 +87,8 @@ rule convert_reads:
     params: batch = "-l nodes=1:ppn=16,mem=64g", prefix = "Sample_{sample}/logs/" 
     shell: 
         """
-conda activate {methXsort_env_path}
+module load miniconda
+conda activate {program.methXsort_env_path}
 python scripts/methXsort.py convert-reads --read {input.R1} --read2 {input.R2} \
               --out {output.R1} --out2 {output.R2} 
 """
@@ -104,12 +105,13 @@ rule bbsplit:
         refstats = "Sample_{sample}/{sample}_refstats.txt"
     params: 
         batch = "-l nodes=1:ppn=16,mem=64g", 
-        bbsplit_idx = bbsplit_idx,
-        bbsplit_path = bbsplit_path,
+        bbsplit_idx = reference.bbsplit_idx,
+        bbsplit_path = reference.bbsplit_path,
     shell: 
         """
-        conda activate {methXsort_env_path}
-        bbsplit.sh build={bbsplit_idx} path={bbsplit_path} \
+        module load miniconda
+        conda activate {program.methXsort_env_path}
+        bbsplit.sh build={params.bbsplit_idx} path={params.bbsplit_path} \
             in={input.reads_R1} in2={input.reads_R2} \
             out_mm={output.bam_mm} out_hs={output.bam_hs}  \
             minhits=1 ambiguous2=all \
@@ -129,7 +131,8 @@ rule convert_bam_to_fastq:
     params: batch = "-l nodes=1:ppn=16,mem=64g",
     shell:
         """
-        conda activate {methXsort_env_path}
+        module load miniconda
+        conda activate {program.methXsort_env_path}
         python scripts/methXsort.py bam-to-fastq --out {output.fastq_hs_R1} --out2 {output.fastq_hs_R2} {input.bam_hs}
         python scripts/methXsort.py bam-to-fastq --out {output.fastq_mm_R1} --out2 {output.fastq_mm_R2} {input.bam_mm}
         """
@@ -137,26 +140,23 @@ rule convert_bam_to_fastq:
 rule stat_read_number: 
     input: 
         raw_R1 = makefilebase + "{sample}_R1_001.fastq.gz", 
-        fastq_hs_R1 = "Sample_{sample}/{sample}_hs_R1_001.fastq.gz",
-        fastq_mm_R1 = "Sample_{sample}/{sample}_mm_R1_001.fastq.gz",
+        fastq_hs_R1 = rules.convert_bam_to_fastq.output.fastq_hs_R1,
+        fastq_mm_R1 = rules.convert_bam_to_fastq.output.fastq_mm_R1
     output: 
         "Sample_{sample}/{sample}_read_number.txt"
     params: batch = "-l nodes=1:ppn=16,mem=64g"
     shell: 
         """
-        conda activate {methXsort_env_path}
+        module load miniconda
+        conda activate {program.methXsort_env_path}
         python scripts/stat_read_number.py {input.raw_R1} {input.fastq_hs_R1} {input.fastq_mm_R1} \
            > {output}
         """
-
-rule deliverfastq:
-    input: expand(makefilebase + "{sample}_R1_001.fastq.gz", sample=samples)
-    output: fastqTarFile
-    params: batch = "-l nodes=1:ppn=2,mem=8g"
-    shell: "tar -cvf {output} -C {unaligned} . 1>{output}.log; md5sum {output} > {output}.md5"
 	
 rule meta2json:
-    input: expand("Sample_{sample}/{sample}_MARKEDUPmetrics.txt", sample=samples), expand(makefilebase + "{sample}_R1_001.fastq.gz", sample=samples), report_result, "RSEM/MainPcaPlot.html", project_name + "_" + flowcell + "_multiqc.html"
+    input: 
+        expand(makefilebase + "{sample}_R1_001.fastq.gz", sample=samples), 
+        expand(rules.stat_read_number.output, sample=samples)
     output: one_up + "/meta2json_complete.txt"
     params: batch = "-l nodes=1:ppn=4,mem=8g", prefix = project_name + "_" + flowcell + "_Metadata.txt"
     run:
