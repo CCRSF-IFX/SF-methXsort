@@ -311,16 +311,14 @@ def parallel_bam_to_fastq(bamfile, out1, out2=None, chunk_size=100000):
         fq2.close()
 
 def run_bbsplit(read1, read2, host, graft, out_host, out_graft, 
-                            bbsplit_index_build=1, bbsplit_index_path="bbsplit_index",
-                            bbsplit_path="bbsplit.sh", bbsplit_extra="", tmp_prefix="bbsplit_tmp"):
+                bbsplit_index_build=1, bbsplit_index_path="bbsplit_index",
+                bbsplit_path="bbsplit.sh", bbsplit_extra=""):
     """
     Run bbsplit.sh to split reads and require BAM output files.
     """
-    # Ensure output files have .bam suffix
     if not out_host.lower().endswith(".bam") or not out_graft.lower().endswith(".bam"):
         raise ValueError("Output files must have .bam suffix.")
 
-    # Build bbsplit.sh command to output BAM directly
     cmd = (
         f"{bbsplit_path} build={bbsplit_index_build} "
         f"index={bbsplit_index_path} "
@@ -367,19 +365,18 @@ if __name__ == "__main__":
     parser_bam2fq.add_argument("--out", required=True, help="Output FASTQ file for read 1 (can be .gz)")
     parser_bam2fq.add_argument("--out2", help="Output FASTQ file for read 2 (can be .gz, optional)")
 
-    # Subcommand 4: split
-    parser_split = subparsers.add_parser("split", help="Invoke bbsplit.sh to split reads and convert to BAM")
-    parser_split.add_argument("--read", required=True, help="FASTQ file for read 1")
-    parser_split.add_argument("--read2", help="FASTQ file for read 2 (optional)")
-    parser_split.add_argument("--host", required=True, help="Reference genome name for host")
-    parser_split.add_argument("--graft", required=True, help="Reference genome name for graft")
-    parser_split.add_argument("--out_host", required=True, help="Output BAM file for host")
-    parser_split.add_argument("--out_graft", required=True, help="Output BAM file for graft")
-    parser_split.add_argument("--bbsplit_path", default="bbsplit.sh", help="Path to bbsplit.sh")
-    parser_split.add_argument("--bbsplit_extra", default="", help="Extra parameters for bbsplit.sh")
-    parser_split.add_argument("--bbsplit_index_build", default=1, help="bbsplit index build (default: 1)")
-    parser_split.add_argument("--bbsplit_index_path", default="bbsplit_index", help="bbsplit index path (default: bbsplit_index)")
-    parser_split.add_argument("--tmp_prefix", default="bbsplit_tmp", help="Prefix for temporary files")
+    # Subcommand 4: bbsplit
+    parser_bbsplit = subparsers.add_parser("bbsplit", help="Invoke bbsplit.sh to split reads and convert to BAM")
+    parser_bbsplit.add_argument("--read", required=True, help="FASTQ file for read 1")
+    parser_bbsplit.add_argument("--read2", help="FASTQ file for read 2 (optional)")
+    parser_bbsplit.add_argument("--host", required=True, help="Reference genome name for host")
+    parser_bbsplit.add_argument("--graft", required=True, help="Reference genome name for graft")
+    parser_bbsplit.add_argument("--out_host", required=True, help="Output BAM file for host")
+    parser_bbsplit.add_argument("--out_graft", required=True, help="Output BAM file for graft")
+    parser_bbsplit.add_argument("--bbsplit_path", default="bbsplit.sh", help="Path to bbsplit.sh")
+    parser_bbsplit.add_argument("--bbsplit_extra", default="", help="Extra parameters for bbsplit.sh")
+    parser_bbsplit.add_argument("--bbsplit_index_build", default=1, help="bbsplit index build (default: 1)")
+    parser_bbsplit.add_argument("--bbsplit_index_path", default="bbsplit_index", help="bbsplit index path (default: bbsplit_index)")
 
     # Subcommand 5: bbsplit-build
     parser_bbsplit_build = subparsers.add_parser("bbsplit-build", help="Build bbsplit index from converted reference FASTA files")
@@ -403,15 +400,14 @@ if __name__ == "__main__":
             parallel_convert_fastq(args.read2, args.out2, mode="r2")
     elif args.command == "bam-to-fastq":
         parallel_bam_to_fastq(args.bamfile, args.out, args.out2)
-    elif args.command == "split":
+    elif args.command == "bbsplit":
         run_bbsplit(
             args.read, args.read2, args.host, args.graft,
             args.out_host, args.out_graft,
             bbsplit_path=args.bbsplit_path,
             bbsplit_extra=args.bbsplit_extra,
             bbsplit_index_build=args.bbsplit_index_build,
-            bbsplit_index_path=args.bbsplit_index_path,
-            tmp_prefix=args.tmp_prefix
+            bbsplit_index_path=args.bbsplit_index_path
         )
     elif args.command == "bbsplit-build":
         build_bbsplit_index(
