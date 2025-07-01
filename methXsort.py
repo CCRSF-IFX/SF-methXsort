@@ -11,6 +11,7 @@ import pysam
 from multiprocessing import Pool, cpu_count
 import subprocess
 import shlex
+import pathlib
 
 def wrap(seq, width=60):
     return [seq[i:i+width] for i in range(0, len(seq), width)]
@@ -72,7 +73,7 @@ def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None):
     # For read1: C->T, add original sequence to header (corrected awk command)
     cmd1 = (
         f"zcat {read} | "
-        "awk 'NR%4==1{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}' | "
+        "awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
         "sed '2~4s/C/T/g;2~4s/c/t/g' | gzip > {out}"
     ).format(read=read, out=out)
     print(f"[convert-reads] CMD1: {cmd1}", file=sys.stdout)
@@ -81,7 +82,7 @@ def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None):
     if read2 and out2:
         cmd2 = (
             f"zcat {read2} | "
-            "awk 'NR%4==1{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}' | "
+            "awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
             "sed '2~4s/G/A/g;2~4s/g/a/g' | gzip > {out2}"
         ).format(read2=read2, out2=out2)
         print(f"[convert-reads] CMD2: {cmd2}", file=sys.stdout)
@@ -321,7 +322,7 @@ def run_bbsplit(read1, read2, host, graft, out_host, out_graft,
 
     cmd = (
         f"{bbsplit_path} build={bbsplit_index_build} "
-        f"index={bbsplit_index_path} "
+        f"path={bbsplit_index_path} "
         f"in={read1} "
         f"{f'in2={read2} ' if read2 else ''}"
         f"out_{host}={out_host} "
@@ -341,6 +342,24 @@ def build_bbsplit_index(host_fa, graft_fa, host_name, graft_name, bbsplit_idx_di
     )
     print(f"[bbsplit-build] CMD: {cmd}", file=sys.stdout)
     subprocess.check_call(cmd, shell=True)
+
+def ensure_bbsplit_index_structure(bbsplit_index_path, build="1"):
+    """
+    Ensure the bbsplit index folder structure exists:
+    <bbsplit_index_path>/ref/genome/<build>
+    <bbsplit_index_path>/ref/index/<build>
+    Raise an error if any required directory does not exist.
+    """
+    base = pathlib.Path(bbsplit_index_path)
+    genome_dir = base / "ref" / "genome" / str(build)
+    index_dir = base / "ref" / "index" / str(build)
+    if not genome_dir.is_dir() or not index_dir.is_dir():
+        raise FileNotFoundError(
+            f"Required bbsplit index directories do not exist:\n"
+            f"  {genome_dir}\n"
+            f"  {index_dir}\n"
+            "Please build the bbsplit index first."
+        )
 
 def fastq_count(filename):
     """
@@ -430,12 +449,21 @@ if __name__ == "__main__":
         out_fa = convert_fasta(args.ref_fasta, out_fa=out_fa)
         print(out_fa)
     elif args.command == "convert-reads":
-        parallel_convert_fastq(args.read, args.out, mode="r1")
-        if args.read2 and args.out2:
-            parallel_convert_fastq(args.read2, args.out2, mode="r2")
+        # Old parallel_convert_fastq code (commented out)
+        # out = args.out if args.out else args.read + ".meth"
+        # parallel_convert_fastq(args.read, out, mode="r1")
+        # if args.read2:
+        #     out2 = args.out2 if args.out2 else args.read2 + ".meth"
+        #     parallel_convert_fastq(args.read2, out2, mode="r2")
+
+        # Use the fast awk/sed/gzip implementation
+        out = args.out if args.out else args.read + ".meth"
+        out2 = args.out2 if args.read2 and args.out2 else (args.read2 + ".meth" if args.read2 else None)
+        convert_reads_c2t_r1_g2a_r2(args.read, args.read2, out, out2)
     elif args.command == "bam-to-fastq":
         parallel_bam_to_fastq(args.bamfile, args.out, args.out2)
     elif args.command == "bbsplit":
+        ensure_bbsplit_index_structure(args.bbsplit_index_path, args.bbsplit_index_build)
         run_bbsplit(
             args.read, args.read2, args.host, args.graft,
             args.out_host, args.out_graft,
