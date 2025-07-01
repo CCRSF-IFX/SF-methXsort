@@ -53,8 +53,10 @@ def main():
     n_total = n_host + n_graft
 
     print(f"Total true reads: {true_total}")
-    print(f"Host ({host_tag}) reads found: {n_host}")
-    print(f"Graft ({graft_tag}) reads found: {n_graft}")
+    print(f"Host ({host_tag}) reads found true positive: {n_host}")
+    print(f"Host ({host_tag}) reads found false positive (wrong IDs): {len(true_host_ids_wrong)}")
+    print(f"Graft ({graft_tag}) reads found true positive: {n_graft}")
+    print(f"Graft ({graft_tag}) reads found false positive (wrong IDs): {len(true_graft_ids_wrong)}")
     print(f"Sum found: {n_total}")
     print(f"Fraction host: {n_host/true_total:.4f}")
     print(f"Fraction graft: {n_graft/true_total:.4f}")

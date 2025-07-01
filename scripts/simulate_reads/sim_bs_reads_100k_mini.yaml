@@ -1,0 +1,12 @@
+# config.yaml for sim_bs_reads_sherman.smk
+host_fa: /mnt/ccrsf-ifx/Software/github/methXsort/data/ecoli.fa
+graft_fa: /mnt/ccrsf-ifx/Software/github/methXsort/data/ehec.fa
+outdir: sherman_reads_100k/
+read_pair_number: 100000  # Number of read pairs to simulate
+
+methxsort_path: /mnt/ccrsf-ifx/Software/github/methXsort/methXsort.py
+sherman_path: "/mnt/ccrsf-ifx/Software/tools/Sherman/v0.1.8/Sherman"
+stat_accuracy_path: "/mnt/ccrsf-ifx/Software/github/methXsort/scripts/simulate_reads/stat_accuracy.py"
+
+bbsplit_idx_path: /mnt/ccrsf-static/illumina/RnD_methXsort/results/test/test_bbsplit/bbsplit_idx_convert
+bbsplit_idx: 1

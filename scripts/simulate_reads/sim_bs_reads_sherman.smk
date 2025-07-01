@@ -1,54 +1,61 @@
-hg38 = config["hg38"]
-mm10 = config["mm10"]
-outdir = config["outdir"]
+
+graft_fa = config["graft_fa"]
+host_fa = config["host_fa"]
+graft_name = os.path.basename(graft_fa).split(".")[0]
+host_name = os.path.basename(host_fa).split(".")[0]
+outdir = os.path.abspath(config["outdir"])
 read_number = config["read_pair_number"]
 bbsplit_path = config["bbsplit_idx_path"]
 bbsplit_idx = config["bbsplit_idx"]
 
-sherman_path = "/mnt/ccrsf-ifx/Software/tools/Sherman/v0.1.8/Sherman"
+methxsort_path = config["methxsort_path"]
+sherman_path = config["sherman_path"]
+stat_accuracy_path = config.get("stat_accuracy_path", None)
 
 rule all:
     input:
         expand(os.path.join(outdir, "fastq/bbsplit_{genome}_{pair}.fastq.gz"), 
-               genome=["hg38", "mm10"], 
+               genome=["graft", "host"], 
                pair =["R1", "R2"]),
+        os.path.join(outdir, "read_number_stat.txt"),
+        os.path.join(outdir, "accuracy_stat.txt")
 
 rule sherman: 
     input: 
-        hg38 = hg38,
-        mm10 = mm10,
+        graft = graft_fa,
+        host = host_fa,
     params:
-        od_hg38 = os.path.join(outdir, "hg38/"),
-        od_mm10 = os.path.join(outdir, "mm10/"),
+        od_graft = os.path.join(outdir, "graft"),
+        od_host = os.path.join(outdir, "host"),
     output:
-        hg38 = os.path.join(outdir, "hg38/sherman.log"), 
-        mm10 = os.path.join(outdir, "mm10/sherman.log"),
-        sim_hg38_R1 = os.path.join(outdir, "sim_reads/simulated_bs_hg38_R1.fastq.gz"),
-        sim_hg38_R2 = os.path.join(outdir, "sim_reads/simulated_bs_hg38_R2.fastq.gz"),
-        sim_mm10_R1 = os.path.join(outdir, "sim_reads/simulated_bs_mm10_R1.fastq.gz"),
-        sim_mm10_R2 = os.path.join(outdir, "sim_reads/simulated_bs_mm10_R2.fastq.gz"),
+        graft = os.path.join(outdir, "graft/sherman.log"), 
+        host = os.path.join(outdir, "host/sherman.log"),
+        sim_graft_R1 = os.path.join(outdir, "sim_reads/simulated_bs_graft_R1.fastq.gz"),
+        sim_graft_R2 = os.path.join(outdir, "sim_reads/simulated_bs_graft_R2.fastq.gz"),
+        sim_host_R1 = os.path.join(outdir, "sim_reads/simulated_bs_host_R1.fastq.gz"),
+        sim_host_R2 = os.path.join(outdir, "sim_reads/simulated_bs_host_R2.fastq.gz"),
     shell:
         """
-ln -s {input.hg38} {params.od_hg38}/hg38.fa
-ln -s {input.mm10} {params.od_mm10}/mm10.fa
-mkdir -p {params.od_hg38} && cd  {params.od_hg38} && \
- {sherman_path} -l 150 -n {read_number} --genome_folder {params.od_hg38} -pe > {output.hg38} 2>&1 & 
-mkdir -p {params.od_mm10} && cd  {params.od_mm10} && \
- {sherman_path} -l 150 -n {read_number} --genome_folder {params.od_mm10} -pe > {output.mm10} 2>&1 &
+mkdir -p {params.od_graft} && ln -s {input.graft} {params.od_graft}/graft.fa
+mkdir -p {params.od_host} && ln -s {input.host} {params.od_host}/host.fa
+cd  {params.od_graft} && \
+ {sherman_path} --conversion_rate 60 -l 150 -n {read_number} --genome_folder {params.od_graft} -pe > {output.graft} 2>&1 & 
+cd  {params.od_host} && \
+ {sherman_path} --conversion_rate 60 -l 150 -n {read_number} --genome_folder {params.od_host} -pe > {output.host} 2>&1 &
 wait
 cd ../ && 
-cat {params.od_hg38}/simulated_1.fastq |sed '1~4s/^@\([0-9][0-9]*_\)/@\\1hg38_/' |gzip -c > {output.sim_hg38_R1}
-cat {params.od_hg38}/simulated_2.fastq |sed '1~4s/^@\([0-9][0-9]*_\)/@\\1hg38_/' |gzip -c > {output.sim_hg38_R2}
-cat {params.od_mm10}/simulated_1.fastq |sed '1~4s/^@\([0-9][0-9]*_\)/@\\1mm10_/' |gzip -c > {output.sim_mm10_R1}
-cat {params.od_mm10}/simulated_2.fastq |sed '1~4s/^@\([0-9][0-9]*_\)/@\\1mm10_/' |gzip -c > {output.sim_mm10_R2}
+cat {params.od_graft}/simulated_1.fastq |sed '1~4s/^@\([0-9][0-9]*_\)/@\\1graft_/' |gzip -c > {output.sim_graft_R1}
+cat {params.od_graft}/simulated_2.fastq |sed '1~4s/^@\([0-9][0-9]*_\)/@\\1graft_/' |gzip -c > {output.sim_graft_R2}
+cat {params.od_host}/simulated_1.fastq |sed '1~4s/^@\([0-9][0-9]*_\)/@\\1host_/' |gzip -c > {output.sim_host_R1}
+cat {params.od_host}/simulated_2.fastq |sed '1~4s/^@\([0-9][0-9]*_\)/@\\1host_/' |gzip -c > {output.sim_host_R2}
 """
 
-rule merge_hg38_mm10:
+rule merge_graft_host:
     input:
-        hg38_R1 = rules.sherman.output.sim_hg38_R1,
-        hg38_R2 = rules.sherman.output.sim_hg38_R2,
-        mm10_R1 = rules.sherman.output.sim_mm10_R1,
-        mm10_R2 = rules.sherman.output.sim_mm10_R2,
+        graft_R1 = rules.sherman.output.sim_graft_R1,
+        graft_R2 = rules.sherman.output.sim_graft_R2,
+        host_R1 = rules.sherman.output.sim_host_R1,
+        host_R2 = rules.sherman.output.sim_host_R2,
     output:
         merged_R1 = os.path.join(outdir, "sim_reads/merged_simulated_bs_R1.fastq.gz"),
         merged_R2 = os.path.join(outdir, "sim_reads/merged_simulated_bs_R2.fastq.gz"),
@@ -56,45 +63,118 @@ rule merge_hg38_mm10:
         merged_cvt_R2 = os.path.join(outdir, "sim_reads/merged_simulated_bscvt_R2.fastq.gz"),
     shell:
         """
-cat {input.hg38_R1} {input.mm10_R1} > {output.merged_R1}
-cat {input.hg38_R2} {input.mm10_R2} > {output.merged_R2}
-python /mnt/ccrsf-ifx/Software/github/methXsort/methxsort.py convert-reads \
+cat {input.graft_R1} {input.host_R1} > {output.merged_R1}
+cat {input.graft_R2} {input.host_R2} > {output.merged_R2}
+python {methxsort_path} convert-reads \
     --read {output.merged_R1} --read2 {output.merged_R2} \
     --out {output.merged_cvt_R1} --out2 {output.merged_cvt_R2}
 """
 
+rule convert_ref:
+    input:
+        graft_fa = graft_fa,
+        host_fa = host_fa,
+    output:
+        graft_fa_cvt = os.path.join(outdir, "ref_idx/graft_cvt.fa"),
+        host_fa_cvt = os.path.join(outdir, "ref_idx/host_cvt.fa"),
+    shell:
+        """
+python {methxsort_path} convert-ref \
+    {input.graft_fa} --out {output.graft_fa_cvt} 
+python {methxsort_path} convert-ref \
+    {input.host_fa} --out {output.host_fa_cvt}
+"""
+
+rule bbsplit_idx:
+    input:
+        graft_fa = rules.convert_ref.output.graft_fa_cvt,
+        host_fa = rules.convert_ref.output.host_fa_cvt,
+    output:
+        log = os.path.join(outdir, "ref_idx/bbsplit_index.log"),
+    params:
+        bbsplit_index_path = os.path.join(outdir, "ref_idx/bbsplit_index"),
+        build = 1
+
+    shell:
+        """
+python {methxsort_path} bbsplit-index \
+    --host {input.host_fa} --graft {input.graft_fa} \
+    --host_name {host_name} --graft_name {graft_name} \
+    --bbsplit_index_path {params.bbsplit_index_path} \
+    --bbsplit_index_build 1 > {output.log} 2>&1
+
+"""
+
 rule bbsplit:
     input:
-        reads_R1 = rules.merge_hg38_mm10.output.merged_cvt_R1,
-        reads_R2 = rules.merge_hg38_mm10.output.merged_cvt_R2,
+        bbsplit_idx_log = rules.bbsplit_idx.output.log,
+        reads_R1 = rules.merge_graft_host.output.merged_cvt_R1,
+        reads_R2 = rules.merge_graft_host.output.merged_cvt_R2,
+    params:
+        bbsplit_index_path = os.path.join(outdir, "ref_idx/bbsplit_index"),
+        bbsplit_idx = bbsplit_idx,
     output:
         bbsplit_log = os.path.join(outdir, "bbsplit.log"),
-        bam_hg38 = os.path.join(outdir, "bbsplit/bbsplit_hg38.bam"),
-        bam_mm10 = os.path.join(outdir, "bbsplit/bbsplit_mm10.bam"),
+        bam_graft = os.path.join(outdir, "bbsplit/bbsplit_graft.bam"),
+        bam_host = os.path.join(outdir, "bbsplit/bbsplit_host.bam"),
         scafstats = os.path.join(outdir, "bbsplit/scafstats.log"),
         refstats = os.path.join(outdir, "bbsplit/refstats.log"),
     shell:
         """
-bbsplit.sh build={bbsplit_idx} path={bbsplit_path} \
-    in={input.reads_R1} in2={input.reads_R2} \
-    out_mm10={output.bam_mm10} out_hg38={output.bam_hg38}  \
-    minhits=1 ambiguous2=all \
-    scafstats={output.scafstats} refstats={output.refstats} \
+
+python {methxsort_path} bbsplit \
+    --read {input.reads_R1} --read2 {input.reads_R2} \
+    --host {host_name} --graft {graft_name} \
+    --bbsplit_index_build 1 \
+    --bbsplit_index_path {params.bbsplit_index_path} \
+    --out_host {output.bam_host} --out_graft {output.bam_graft} \
+    --bbsplit_extra "scafstats={output.scafstats} refstats={output.refstats}" \
     > {output.bbsplit_log} 2>&1
 """
 
 rule convert_bam_to_fastq:
     input:
-        bam_hg38 = rules.bbsplit.output.bam_hg38,
-        bam_mm10 = rules.bbsplit.output.bam_mm10,
+        bam_graft = rules.bbsplit.output.bam_graft,
+        bam_host = rules.bbsplit.output.bam_host,
     output:
-        fastq_hg38_R1 = os.path.join(outdir, "fastq/bbsplit_hg38_R1.fastq.gz"),
-        fastq_hg38_R2 = os.path.join(outdir, "fastq/bbsplit_hg38_R2.fastq.gz"),
-        fastq_mm10_R1 = os.path.join(outdir, "fastq/bbsplit_mm10_R1.fastq.gz"),
-        fastq_mm10_R2 = os.path.join(outdir, "fastq/bbsplit_mm10_R2.fastq.gz"),
+        fastq_graft_R1 = os.path.join(outdir, "fastq/bbsplit_graft_R1.fastq.gz"),
+        fastq_graft_R2 = os.path.join(outdir, "fastq/bbsplit_graft_R2.fastq.gz"),
+        fastq_host_R1 = os.path.join(outdir, "fastq/bbsplit_host_R1.fastq.gz"),
+        fastq_host_R2 = os.path.join(outdir, "fastq/bbsplit_host_R2.fastq.gz"),
     shell:
         """
-python /mnt/ccrsf-ifx/Software/github/methXsort/methxsort.py bam-to-fastq --out {output.fastq_hg38_R1} --out2 {output.fastq_hg38_R2} {input.bam_hg38}
-python /mnt/ccrsf-ifx/Software/github/methXsort/methxsort.py bam-to-fastq --out {output.fastq_mm10_R1} --out2 {output.fastq_mm10_R2} {input.bam_mm10}
+python {methxsort_path} bam-to-fastq \
+    --out {output.fastq_graft_R1} --out2 {output.fastq_graft_R2} {input.bam_graft}
+python {methxsort_path} bam-to-fastq \
+    --out {output.fastq_host_R1} --out2 {output.fastq_host_R2} {input.bam_host}
 """
 
+rule stat_read_number: 
+    input: 
+        raw_R1 = rules.merge_graft_host.output.merged_cvt_R1,
+        fastq_graft_R1 = rules.convert_bam_to_fastq.output.fastq_graft_R1,
+        fastq_host_R1 = rules.convert_bam_to_fastq.output.fastq_host_R1
+    output: 
+        read_number_stat = os.path.join(outdir, "read_number_stat.txt")
+    params: batch = "-l nodes=1:ppn=16,mem=64g"
+    shell: 
+        """
+python {methxsort_path} stat-split --raw {input.raw_R1} \
+             --graft {input.fastq_graft_R1} --host {input.fastq_host_R1} \
+              > {output.read_number_stat}
+"""
+
+rule stat_accuracy:
+    input:
+        raw_R1 = rules.merge_graft_host.output.merged_cvt_R1,
+        fastq_graft_R1 = rules.convert_bam_to_fastq.output.fastq_graft_R1,
+        fastq_host_R1 = rules.convert_bam_to_fastq.output.fastq_host_R1
+    output:
+        accuracy_stat = os.path.join(outdir, "accuracy_stat.txt")
+    params: batch = "-l nodes=1:ppn=16,mem=64g"
+    shell:
+        """
+python {stat_accuracy_path} {read_number} \
+             {input.fastq_host_R1},host  {input.fastq_graft_R1},graft \
+              > {output.accuracy_stat}
+"""

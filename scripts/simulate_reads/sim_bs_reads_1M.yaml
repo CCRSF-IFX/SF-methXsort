@@ -5,5 +5,7 @@ outdir: /mnt/ccrsf-static/illumina/RnD_methXsort/results/test/test_bbsplit/sherm
 read_pair_number: 100000  # Number of read pairs to simulate
 
 
+sherman_path: "/mnt/ccrsf-ifx/Software/tools/Sherman/v0.1.8/Sherman"
+
 bbsplit_idx_path: /mnt/ccrsf-static/illumina/RnD_methXsort/results/test/test_bbsplit/bbsplit_idx_convert
 bbsplit_idx: 1
