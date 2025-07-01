@@ -343,16 +343,19 @@ def build_bbsplit_index(host_fa, graft_fa, host_name, graft_name, bbsplit_idx_di
     print(f"[bbsplit-build] CMD: {cmd}", file=sys.stdout)
     subprocess.check_call(cmd, shell=True)
 
-def ensure_bbsplit_index_structure(bbsplit_index_path, build="1"):
+def ensure_bbsplit_index_structure(bbsplit_index_path, build="1", host=None, graft=None):
     """
     Ensure the bbsplit index folder structure exists:
     <bbsplit_index_path>/ref/genome/<build>
     <bbsplit_index_path>/ref/index/<build>
-    Raise an error if any required directory does not exist.
+    Also ensure that host and graft names exist in namelist.txt.
     """
     base = pathlib.Path(bbsplit_index_path)
     genome_dir = base / "ref" / "genome" / str(build)
     index_dir = base / "ref" / "index" / str(build)
+    namelist_file = genome_dir / "namelist.txt"
+
+    # Check directory structure
     if not genome_dir.is_dir() or not index_dir.is_dir():
         raise FileNotFoundError(
             f"Required bbsplit index directories do not exist:\n"
@@ -360,6 +363,18 @@ def ensure_bbsplit_index_structure(bbsplit_index_path, build="1"):
             f"  {index_dir}\n"
             "Please build the bbsplit index first."
         )
+
+    # Check host and graft names in namelist.txt if provided
+    if host or graft:
+        if not namelist_file.is_file():
+            raise FileNotFoundError(f"namelist.txt not found: {namelist_file}")
+        with open(namelist_file) as f:
+            names = set(line.strip() for line in f if line.strip())
+        missing = [n for n in (host, graft) if n and n not in names]
+        if missing:
+            raise ValueError(
+                f"The following names are missing in {namelist_file}: {', '.join(missing)}"
+            )
 
 def fastq_count(filename):
     """
@@ -463,7 +478,9 @@ if __name__ == "__main__":
     elif args.command == "bam-to-fastq":
         parallel_bam_to_fastq(args.bamfile, args.out, args.out2)
     elif args.command == "bbsplit":
-        ensure_bbsplit_index_structure(args.bbsplit_index_path, args.bbsplit_index_build)
+        ensure_bbsplit_index_structure(
+            args.bbsplit_index_path, args.bbsplit_index_build, host=args.host, graft=args.graft
+        )
         run_bbsplit(
             args.read, args.read2, args.host, args.graft,
             args.out_host, args.out_graft,
