@@ -333,8 +333,17 @@ def run_bbsplit(read1, read2, host, graft, out_host, out_graft,
     print(f"Running: {cmd}", file=sys.stderr)
     subprocess.check_call(shlex.split(cmd))
 
-# Usage:
-# parallel_convert_fastq("input.fastq.gz", "output.fastq.gz")
+def build_bbsplit_index(host_fa, graft_fa, host_name, graft_name, bbsplit_idx_dir="bbsplit_idx_convert", bbsplit_path="bbsplit.sh", build="1"):
+    """
+    Build bbsplit index using the provided converted reference FASTA files and custom names.
+    """
+    cmd = (
+        f"{bbsplit_path} path={bbsplit_idx_dir} build={build} "
+        f"ref_{host_name}={host_fa} ref_{graft_name}={graft_fa}"
+    )
+    print(f"[bbsplit-build] CMD: {cmd}", file=sys.stdout)
+    subprocess.check_call(cmd, shell=True)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sort reads into host and graft categories")
@@ -372,6 +381,16 @@ if __name__ == "__main__":
     parser_split.add_argument("--bbsplit_index_path", default="bbsplit_index", help="bbsplit index path (default: bbsplit_index)")
     parser_split.add_argument("--tmp_prefix", default="bbsplit_tmp", help="Prefix for temporary files")
 
+    # Subcommand 5: bbsplit-build
+    parser_bbsplit_build = subparsers.add_parser("bbsplit-build", help="Build bbsplit index from converted reference FASTA files")
+    parser_bbsplit_build.add_argument("--host", required=True, help="Converted host reference FASTA file")
+    parser_bbsplit_build.add_argument("--graft", required=True, help="Converted graft reference FASTA file")
+    parser_bbsplit_build.add_argument("--host_name", required=True, help="Name for host reference (e.g. mm)")
+    parser_bbsplit_build.add_argument("--graft_name", required=True, help="Name for graft reference (e.g. hs)")
+    parser_bbsplit_build.add_argument("--bbsplit_idx_dir", default="bbsplit_idx_convert", help="bbsplit index directory")
+    parser_bbsplit_build.add_argument("--bbsplit_path", default="bbsplit.sh", help="Path to bbsplit.sh")
+    parser_bbsplit_build.add_argument("--build", default="1", help="Build number for bbsplit index (default: 1)")
+
     args = parser.parse_args()
 
     if args.command == "convert-ref":
@@ -393,5 +412,15 @@ if __name__ == "__main__":
             bbsplit_index_build=args.bbsplit_index_build,
             bbsplit_index_path=args.bbsplit_index_path,
             tmp_prefix=args.tmp_prefix
+        )
+    elif args.command == "bbsplit-build":
+        build_bbsplit_index(
+            host_fa=args.host,
+            graft_fa=args.graft,
+            host_name=args.host_name,
+            graft_name=args.graft_name,
+            bbsplit_idx_dir=args.bbsplit_idx_dir,
+            bbsplit_path=args.bbsplit_path,
+            build=args.build
         )
 
