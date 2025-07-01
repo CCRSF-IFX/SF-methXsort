@@ -280,36 +280,47 @@ def read_bam_chunk(bam, chunk_size):
         pass
     return records
 
-def parallel_bam_to_fastq(bamfile, out1, out2=None, chunk_size=100000):
-    def open_out(filename):
-        if filename and filename.endswith('.gz'):
-            return gzip.open(filename, "wt")
-        else:
-            return open(filename, "w")
+# def parallel_bam_to_fastq(bamfile, out1, out2=None, chunk_size=100000):
+#     def open_out(filename):
+#         if filename and filename.endswith('.gz'):
+#             return gzip.open(filename, "wt")
+#         else:
+#             return open(filename, "w")
 
-    fq1 = open_out(out1)
-    fq2 = open_out(out2) if out2 else None
+#     fq1 = open_out(out1)
+#     fq2 = open_out(out2) if out2 else None
 
-    with pysam.AlignmentFile(bamfile, "rb") as bam:
-        pool = Pool(cpu_count())
-        while True:
-            chunk = read_bam_chunk(bam, chunk_size)
-            if not chunk:
-                break
-            results = pool.map(process_bam_chunk, [chunk])
-            for recs in results:
-                for is_read1, fq_entry in recs:
-                    if is_read1:
-                        fq1.write(fq_entry)
-                    elif fq2:
-                        fq2.write(fq_entry)
-                    else:
-                        fq1.write(fq_entry)
-        pool.close()
-        pool.join()
-    fq1.close()
-    if fq2:
-        fq2.close()
+#     with pysam.AlignmentFile(bamfile, "rb") as bam:
+#         for read in bam.fetch(until_eof=True):
+#             if read.is_unmapped:
+#                 continue
+#             # Determine if read is read1 or read2
+#             if read.is_read1:
+#                 fq = fq1
+#             elif read.is_read2 and fq2:
+#                 fq = fq2
+#             else:
+#                 fq = fq1
+#             parts = [read.query_name]
+#             # Try to extract original sequence from header
+#             orig_seq = None
+#             if "ORIGINAL_SEQ:" in read.query_name:
+#                 parts = read.query_name.split(" ORIGINAL_SEQ:")
+#                 if len(parts) > 1:
+#                     orig_seq = parts[1].strip()
+#             if not orig_seq or orig_seq == "":
+#                 orig_seq = "N" * read.query_length
+#             fq.write(f"@{parts[0]}\n")
+#             fq.write(f"{orig_seq}\n")
+#             fq.write("+\n")
+#             qual = read.qual if read.qual else "I" * read.query_length
+#             if read.is_reverse:
+#                 qual = qual[::-1]
+#             fq.write(f"{qual}\n")
+
+#     fq1.close()
+#     if fq2:
+#         fq2.close()
 
 def run_bbsplit(read1, read2, host, graft, out_host, out_graft, 
                 bbsplit_index_build=1, bbsplit_index_path="bbsplit_index",
@@ -441,15 +452,15 @@ if __name__ == "__main__":
     parser_bbsplit.add_argument("--bbsplit_index_build", default=1, help="bbsplit index build (default: 1)")
     parser_bbsplit.add_argument("--bbsplit_index_path", default="bbsplit_index", help="bbsplit index path (default: bbsplit_index)")
 
-    # Subcommand 5: bbsplit-build
-    parser_bbsplit_build = subparsers.add_parser("bbsplit-build", help="Build bbsplit index from converted reference FASTA files")
+    # Subcommand 5: bbsplit-index
+    parser_bbsplit_build = subparsers.add_parser("bbsplit-index", help="Build bbsplit index from converted reference FASTA files")
     parser_bbsplit_build.add_argument("--host", required=True, help="Converted host reference FASTA file")
     parser_bbsplit_build.add_argument("--graft", required=True, help="Converted graft reference FASTA file")
     parser_bbsplit_build.add_argument("--host_name", required=True, help="Name for host reference (e.g. mm)")
     parser_bbsplit_build.add_argument("--graft_name", required=True, help="Name for graft reference (e.g. hs)")
-    parser_bbsplit_build.add_argument("--bbsplit_idx_dir", default="bbsplit_idx_convert", help="bbsplit index directory")
     parser_bbsplit_build.add_argument("--bbsplit_path", default="bbsplit.sh", help="Path to bbsplit.sh")
-    parser_bbsplit_build.add_argument("--build", default="1", help="Build number for bbsplit index (default: 1)")
+    parser_bbsplit_build.add_argument("--bbsplit_index_path", default="bbsplit_idx_convert", help="bbsplit index directory")
+    parser_bbsplit_build.add_argument("--bbsplit_index_build", default="1", help="Build number for bbsplit index (default: 1)")
 
     # Subcommand: stat-split
     parser_stat_split = subparsers.add_parser("stat-split", help="Output split statistics as CSV")
@@ -476,7 +487,7 @@ if __name__ == "__main__":
         out2 = args.out2 if args.read2 and args.out2 else (args.read2 + ".meth" if args.read2 else None)
         convert_reads_c2t_r1_g2a_r2(args.read, args.read2, out, out2)
     elif args.command == "bam-to-fastq":
-        parallel_bam_to_fastq(args.bamfile, args.out, args.out2)
+        bam_to_fastq_with_original_seq(args.bamfile, args.out, args.out2)
     elif args.command == "bbsplit":
         ensure_bbsplit_index_structure(
             args.bbsplit_index_path, args.bbsplit_index_build, host=args.host, graft=args.graft
@@ -489,15 +500,15 @@ if __name__ == "__main__":
             bbsplit_index_build=args.bbsplit_index_build,
             bbsplit_index_path=args.bbsplit_index_path
         )
-    elif args.command == "bbsplit-build":
+    elif args.command == "bbsplit-index":
         build_bbsplit_index(
             host_fa=args.host,
             graft_fa=args.graft,
             host_name=args.host_name,
             graft_name=args.graft_name,
-            bbsplit_idx_dir=args.bbsplit_idx_dir,
+            bbsplit_idx_dir=args.bbsplit_index_path,
             bbsplit_path=args.bbsplit_path,
-            build=args.build
+            build=args.bbsplit_index_build
         )
     elif args.command == "stat-split":
         stat_split(args.raw, args.host, args.graft)
