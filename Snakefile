@@ -155,7 +155,7 @@ rule stat_read_number:
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
-        python scripts/stat_read_number.py {input.raw_R1} {input.fastq_hs_R1} {input.fastq_mm_R1} \
+        python methXsort.py stat-split {input.raw_R1} {input.fastq_hs_R1} {input.fastq_mm_R1} \
            > {output}
         """
 	
