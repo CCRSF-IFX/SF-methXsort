@@ -327,6 +327,8 @@ def run_bbsplit(read1, read2, host, graft, out_host, out_graft,
                 bbsplit_path="bbsplit.sh", bbsplit_extra=""):
     """
     Run bbsplit.sh to split reads and require BAM output files.
+    # ambiguous=best ambiguous2=split
+    # AMBIGUOUS_bbsplit_graft.bam  AMBIGUOUS_bbsplit_host.bam
     """
     if not out_host.lower().endswith(".bam") or not out_graft.lower().endswith(".bam"):
         raise ValueError("Output files must have .bam suffix.")
@@ -448,7 +450,9 @@ if __name__ == "__main__":
     parser_bbsplit.add_argument("--out_host", required=True, help="Output BAM file for host")
     parser_bbsplit.add_argument("--out_graft", required=True, help="Output BAM file for graft")
     parser_bbsplit.add_argument("--bbsplit_path", default="bbsplit.sh", help="Path to bbsplit.sh")
-    parser_bbsplit.add_argument("--bbsplit_extra", default="", help="Extra parameters for bbsplit.sh")
+    parser_bbsplit.add_argument("--bbsplit_extra", 
+                                default="ambiguous=best ambiguous2=toss", 
+                                help="Extra parameters for bbsplit.sh")
     parser_bbsplit.add_argument("--bbsplit_index_build", default=1, help="bbsplit index build (default: 1)")
     parser_bbsplit.add_argument("--bbsplit_index_path", default="bbsplit_index", help="bbsplit index path (default: bbsplit_index)")
 
