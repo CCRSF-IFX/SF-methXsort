@@ -89,7 +89,7 @@ rule convert_reads:
         """
 module load miniconda
 conda activate {program.methXsort_env_path}
-python scripts/methXsort.py convert-reads --read {input.R1} --read2 {input.R2} \
+python methXsort.py convert-reads --read {input.R1} --read2 {input.R2} \
               --out {output.R1} --out2 {output.R2} 
 """
 
@@ -111,11 +111,17 @@ rule bbsplit:
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
-        bbsplit.sh build={params.bbsplit_idx} path={params.bbsplit_path} \
-            in={input.reads_R1} in2={input.reads_R2} \
-            out_mm={output.bam_mm} out_hs={output.bam_hs}  \
-            minhits=1 ambiguous2=all \
-            scafstats={output.scafstats} refstats={output.refstats} \
+        python methXsort.py bbsplit \
+            --read {input.reads_R1} \
+            --read2 {input.reads_R2} \
+            --host mm \
+            --graft hs \
+            --out_host {output.bam_mm} \
+            --out_graft {output.bam_hs} \
+            --bbsplit_path {params.bbsplit_path} \
+            --bbsplit_index_build 1 \
+            --bbsplit_index_path {params.bbsplit_idx} \
+            --bbsplit_extra "scafstats={output.scafstats} refstats={output.refstats}" \
             > {output.bbsplit_log} 2>&1
         """
 
@@ -133,8 +139,8 @@ rule convert_bam_to_fastq:
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
-        python scripts/methXsort.py bam-to-fastq --out {output.fastq_hs_R1} --out2 {output.fastq_hs_R2} {input.bam_hs}
-        python scripts/methXsort.py bam-to-fastq --out {output.fastq_mm_R1} --out2 {output.fastq_mm_R2} {input.bam_mm}
+        python methXsort.py bam-to-fastq --out {output.fastq_hs_R1} --out2 {output.fastq_hs_R2} {input.bam_hs}
+        python methXsort.py bam-to-fastq --out {output.fastq_mm_R1} --out2 {output.fastq_mm_R2} {input.bam_mm}
         """
 
 rule stat_read_number: 
