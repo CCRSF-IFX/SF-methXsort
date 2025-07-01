@@ -342,6 +342,35 @@ def build_bbsplit_index(host_fa, graft_fa, host_name, graft_name, bbsplit_idx_di
     print(f"[bbsplit-build] CMD: {cmd}", file=sys.stdout)
     subprocess.check_call(cmd, shell=True)
 
+def fastq_count(filename):
+    """
+    Fast count of reads in a FASTQ file (gzipped or plain).
+    """
+    import subprocess
+    import os
+
+    if filename.endswith('.gz'):
+        cmd = f"zcat {filename} | wc -l"
+    else:
+        cmd = f"wc -l < {filename}"
+    n_lines = int(subprocess.check_output(cmd, shell=True).decode().strip())
+    return n_lines // 4
+
+def stat_split(raw_fastq, host_fastq, graft_fastq):
+    """
+    Output CSV with sample name, raw read number, host read number, graft read number, percent graft.
+    Uses fastq_count for efficient counting.
+    """
+    import os
+
+    sample_name = os.path.basename(raw_fastq).split('_')[0]
+    n_raw = fastq_count(raw_fastq)
+    n_host = fastq_count(host_fastq)
+    n_graft = fastq_count(graft_fastq)
+    percent_graft = (n_graft / n_raw * 100) if n_raw else 0
+
+    print("Sample_name,raw_read_number,host_read_number,graft_read_number,percent_graft")
+    print(f"{sample_name},{n_raw},{n_host},{n_graft},{percent_graft:.2f}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sort reads into host and graft categories")
@@ -388,6 +417,12 @@ if __name__ == "__main__":
     parser_bbsplit_build.add_argument("--bbsplit_path", default="bbsplit.sh", help="Path to bbsplit.sh")
     parser_bbsplit_build.add_argument("--build", default="1", help="Build number for bbsplit index (default: 1)")
 
+    # Subcommand: stat-split
+    parser_stat_split = subparsers.add_parser("stat-split", help="Output split statistics as CSV")
+    parser_stat_split.add_argument("--raw", required=True, help="Raw FASTQ file (R1)")
+    parser_stat_split.add_argument("--host", required=True, help="Host FASTQ file (R1)")
+    parser_stat_split.add_argument("--graft", required=True, help="Graft FASTQ file (R1)")
+
     args = parser.parse_args()
 
     if args.command == "convert-ref":
@@ -419,4 +454,6 @@ if __name__ == "__main__":
             bbsplit_path=args.bbsplit_path,
             build=args.build
         )
+    elif args.command == "stat-split":
+        stat_split(args.raw, args.host, args.graft)
 
