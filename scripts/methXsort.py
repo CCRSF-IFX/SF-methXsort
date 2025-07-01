@@ -9,6 +9,8 @@ from itertools import groupby
 import gzip
 import pysam
 from multiprocessing import Pool, cpu_count
+import subprocess
+import shlex
 
 def wrap(seq, width=60):
     return [seq[i:i+width] for i in range(0, len(seq), width)]
@@ -58,53 +60,93 @@ def convert_fasta(ref_fasta, out_fa=None):
 
 def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None):
     """
-    Convert C->T in read (single or read1) and G->A in read2 (if paired-end).
+    Fast conversion using awk+sed+gzip for large FASTQ files.
+    C->T in read (single or read1), G->A in read2 (if paired-end).
     Store the original sequence in the header line as an extra field.
     """
-    def convert_r1(seq):
-        return seq.replace("C", "T").replace("c", "t")
-    def convert_r2(seq):
-        return seq.replace("G", "A").replace("g", "a")
     if out is None:
         out = read + ".meth"
     if read2 and out2 is None:
         out2 = read2 + ".meth"
 
-    def open_out(filename):
-        if filename and filename.endswith('.gz'):
-            return gzip.open(filename, "wt")
-        else:
-            return open(filename, "w")
+    # For read1: C->T, add original sequence to header (corrected awk command)
+    cmd1 = (
+        f"zcat {read} | "
+        "awk 'NR%4==1{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}' | "
+        "sed '2~4s/C/T/g;2~4s/c/t/g' | gzip > {out}"
+    ).format(read=read, out=out)
+    print(f"[convert-reads] CMD1: {cmd1}", file=sys.stdout)
 
-    with nopen(read) as r1, open_out(out) as o1:
-        while True:
-            header = r1.readline()
-            if not header:
-                break
-            seq = r1.readline()
-            plus = r1.readline()
-            qual = r1.readline()
-            # Add original sequence to header
-            header = header.rstrip() + f" ORIGINAL_SEQ:{seq.strip()}\n"
-            o1.write(header)
-            o1.write(convert_r1(seq))
-            o1.write(plus)
-            o1.write(qual)
-    if read2:
-        with nopen(read2) as r2, open_out(out2) as o2:
-            while True:
-                header = r2.readline()
-                if not header:
-                    break
-                seq = r2.readline()
-                plus = r2.readline()
-                qual = r2.readline()
-                header = header.rstrip() + f" ORIGINAL_SEQ:{seq.strip()}\n"
-                o2.write(header)
-                o2.write(convert_r2(seq))
-                o2.write(plus)
-                o2.write(qual)
-    return out, out2 if read2 else out
+    # For read2: G->A, add original sequence to header (corrected awk command)
+    if read2 and out2:
+        cmd2 = (
+            f"zcat {read2} | "
+            "awk 'NR%4==1{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}' | "
+            "sed '2~4s/G/A/g;2~4s/g/a/g' | gzip > {out2}"
+        ).format(read2=read2, out2=out2)
+        print(f"[convert-reads] CMD2: {cmd2}", file=sys.stdout)
+        # Run both commands in parallel
+        p1 = subprocess.Popen(cmd1, shell=True)
+        p2 = subprocess.Popen(cmd2, shell=True)
+        p1.wait()
+        p2.wait()
+        if p1.returncode != 0 or p2.returncode != 0:
+            raise subprocess.CalledProcessError(p1.returncode if p1.returncode != 0 else p2.returncode, cmd1 if p1.returncode != 0 else cmd2)
+        return out, out2
+    else:
+        subprocess.check_call(cmd1, shell=True)
+        return out
+
+# Old Python implementation (commented out for reference)
+# def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None):
+#     """
+#     Convert C->T in read (single or read1) and G->A in read2 (if paired-end).
+#     Store the original sequence in the header line as an extra field.
+#     """
+#     def convert_r1(seq):
+#         return seq.replace("C", "T").replace("c", "t")
+#     def convert_r2(seq):
+#         return seq.replace("G", "A").replace("g", "a")
+#     if out is None:
+#         out = read + ".meth"
+#     if read2 and out2 is None:
+#         out2 = read2 + ".meth"
+
+#     def open_out(filename):
+#         if filename and filename.endswith('.gz'):
+#             return gzip.open(filename, "wt")
+#         else:
+#             return open(filename, "w")
+
+#     with nopen(read) as r1, open_out(out) as o1:
+#         while True:
+#             header = r1.readline()
+#             if not header:
+#                 break
+#             seq = r1.readline()
+#             plus = r1.readline()
+#             qual = r1.readline()
+#             # Add original sequence to header
+#             header = header.rstrip() + f" ORIGINAL_SEQ:{seq.strip()}\n"
+#             o1.write(header)
+#             o1.write(convert_r1(seq))
+#             o1.write(plus)
+#             o1.write(qual)
+#     if read2:
+#         with nopen(read2) as r2, open_out(out2) as o2:
+#             while True:
+#                 header = r2.readline()
+#                 if not header:
+#                     break
+#                 seq = r2.readline()
+#                 plus = r2.readline()
+#                 qual = r2.readline()
+#                 header = header.rstrip() + f" ORIGINAL_SEQ:{seq.strip()}\n"
+#                 o2.write(header)
+#                 o2.write(convert_r2(seq))
+#                 o2.write(plus)
+#                 o2.write(qual)
+#     return out, out2 if read2 else out
 
 def bam_to_fastq_with_original_seq(bamfile, out1, out2=None):
     """
@@ -268,6 +310,29 @@ def parallel_bam_to_fastq(bamfile, out1, out2=None, chunk_size=100000):
     if fq2:
         fq2.close()
 
+def run_bbsplit(read1, read2, host, graft, out_host, out_graft, 
+                            bbsplit_index_build=1, bbsplit_index_path="bbsplit_index",
+                            bbsplit_path="bbsplit.sh", bbsplit_extra="", tmp_prefix="bbsplit_tmp"):
+    """
+    Run bbsplit.sh to split reads and require BAM output files.
+    """
+    # Ensure output files have .bam suffix
+    if not out_host.lower().endswith(".bam") or not out_graft.lower().endswith(".bam"):
+        raise ValueError("Output files must have .bam suffix.")
+
+    # Build bbsplit.sh command to output BAM directly
+    cmd = (
+        f"{bbsplit_path} build={bbsplit_index_build} "
+        f"index={bbsplit_index_path} "
+        f"in={read1} "
+        f"{f'in2={read2} ' if read2 else ''}"
+        f"out_{host}={out_host} "
+        f"out_{graft}={out_graft} "
+        f"{bbsplit_extra}"
+    )
+    print(f"Running: {cmd}", file=sys.stderr)
+    subprocess.check_call(shlex.split(cmd))
+
 # Usage:
 # parallel_convert_fastq("input.fastq.gz", "output.fastq.gz")
 
@@ -293,6 +358,20 @@ if __name__ == "__main__":
     parser_bam2fq.add_argument("--out", required=True, help="Output FASTQ file for read 1 (can be .gz)")
     parser_bam2fq.add_argument("--out2", help="Output FASTQ file for read 2 (can be .gz, optional)")
 
+    # Subcommand 4: split
+    parser_split = subparsers.add_parser("split", help="Invoke bbsplit.sh to split reads and convert to BAM")
+    parser_split.add_argument("--read", required=True, help="FASTQ file for read 1")
+    parser_split.add_argument("--read2", help="FASTQ file for read 2 (optional)")
+    parser_split.add_argument("--host", required=True, help="Reference genome name for host")
+    parser_split.add_argument("--graft", required=True, help="Reference genome name for graft")
+    parser_split.add_argument("--out_host", required=True, help="Output BAM file for host")
+    parser_split.add_argument("--out_graft", required=True, help="Output BAM file for graft")
+    parser_split.add_argument("--bbsplit_path", default="bbsplit.sh", help="Path to bbsplit.sh")
+    parser_split.add_argument("--bbsplit_extra", default="", help="Extra parameters for bbsplit.sh")
+    parser_split.add_argument("--bbsplit_index_build", default=1, help="bbsplit index build (default: 1)")
+    parser_split.add_argument("--bbsplit_index_path", default="bbsplit_index", help="bbsplit index path (default: bbsplit_index)")
+    parser_split.add_argument("--tmp_prefix", default="bbsplit_tmp", help="Prefix for temporary files")
+
     args = parser.parse_args()
 
     if args.command == "convert-ref":
@@ -300,11 +379,19 @@ if __name__ == "__main__":
         out_fa = convert_fasta(args.ref_fasta, out_fa=out_fa)
         print(out_fa)
     elif args.command == "convert-reads":
-        #convert_reads_c2t_r1_g2a_r2(args.read, args.read2, args.out, args.out2)
         parallel_convert_fastq(args.read, args.out, mode="r1")
         if args.read2 and args.out2:
             parallel_convert_fastq(args.read2, args.out2, mode="r2")
     elif args.command == "bam-to-fastq":
-        #bam_to_fastq_with_original_seq(args.bamfile, args.out, args.out2)
         parallel_bam_to_fastq(args.bamfile, args.out, args.out2)
+    elif args.command == "split":
+        run_bbsplit(
+            args.read, args.read2, args.host, args.graft,
+            args.out_host, args.out_graft,
+            bbsplit_path=args.bbsplit_path,
+            bbsplit_extra=args.bbsplit_extra,
+            bbsplit_index_build=args.bbsplit_index_build,
+            bbsplit_index_path=args.bbsplit_index_path,
+            tmp_prefix=args.tmp_prefix
+        )
 
