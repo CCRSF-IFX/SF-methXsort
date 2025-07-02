@@ -358,10 +358,10 @@ def build_bbsplit_index(host_fa, graft_fa, host_name, graft_name, bbsplit_idx_di
 
 def ensure_bbsplit_index_structure(bbsplit_index_path, build="1", host=None, graft=None):
     """
-    Ensure the bbsplit index folder structure exists:
+    1. Ensure the bbsplit index folder structure exists:
     <bbsplit_index_path>/ref/genome/<build>
     <bbsplit_index_path>/ref/index/<build>
-    Also ensure that host and graft names exist in namelist.txt.
+    2. Also ensure that host and graft names exist in namelist.txt.
     """
     base = pathlib.Path(bbsplit_index_path)
     genome_dir = base / "ref" / "genome" / str(build)
