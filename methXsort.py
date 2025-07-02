@@ -261,7 +261,9 @@ def process_bam_chunk(records):
             if len(parts) > 1:
                 orig_seq = parts[1].strip()
         if not orig_seq or orig_seq == "":
-            orig_seq = "N" * read.query_length
+            sys.stderr.write(f"Warning: No original sequence found for read {read.query_name}.\n")
+            sys.exit(1)
+            #orig_seq = "N" * read.query_length
         fq_entry = f"@{parts[0]}\n{orig_seq}\n+\n"
         qual = read.qual if read.qual else "I" * read.query_length
         if read.is_reverse:
