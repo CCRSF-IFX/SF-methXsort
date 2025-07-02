@@ -82,8 +82,8 @@ rule convert_reads:
         R1 = makefilebase + "{sample}_R1_001.fastq.gz", 
         R2 = makefilebase + "{sample}_R2_001.fastq.gz"
     output: 
-        R1 = "Sample_{sample}/{sample}_converted_R1.fastq.gz", 
-        R2 = "Sample_{sample}/{sample}_converted_R2.fastq.gz", 
+        R1 = os.path.join(config.analysis, "Sample_{sample}/{sample}_converted_R1.fastq.gz"), 
+        R2 = os.path.join(config.analysis, "Sample_{sample}/{sample}_converted_R2.fastq.gz"), 
     params: batch = "-l nodes=1:ppn=16,mem=64g", prefix = "Sample_{sample}/logs/" 
     shell: 
         """
@@ -94,16 +94,22 @@ python methXsort.py convert-reads --read {input.R1} --read2 {input.R2} \
 """
 
 rule bbsplit:
+    """
+    Split reads into human (graft) and mouse (host) using bbsplit.
+    With the `ambiguus2=split` option, reads that map to both genomes outputted into: 
+    #AMBIGUOUS_bbsplit_graft.bam  AMBIGUOUS_bbsplit_host.bam
+    """
     input: 
-        reads_R1 = "Sample_{sample}/{sample}_converted_R1.fastq.gz", 
-        reads_R2 = "Sample_{sample}/{sample}_converted_R2.fastq.gz"
+        reads_R1 = rules.convert_reads.output.R1,
+        reads_R2 = rules.convert_reads.output.R2
     output: 
-        bbsplit_log = "Sample_{sample}/logs/{sample}_bbsplit.log",
-        bam_hs = "Sample_{sample}/{sample}_hs.bam",
-        bam_mm = "Sample_{sample}/{sample}_mm.bam",
-        scafstats = "Sample_{sample}/{sample}_scafstats.txt",
-        refstats = "Sample_{sample}/{sample}_refstats.txt"
+        bbsplit_log = os.path.join(config.analysis, "Sample_{sample}/logs/{sample}_bbsplit.log"),
+        bam_hs = os.path.join(config.analysis, "Sample_{sample}/{sample}_hs.bam"),
+        bam_mm = os.path.join(config.analysis, "Sample_{sample}/{sample}_mm.bam"),
+        scafstats = os.path.join(config.analysis, "Sample_{sample}/{sample}_scafstats.txt"),
+        refstats = os.path.join(config.analysis, "Sample_{sample}/{sample}_refstats.txt")
     params: 
+        workdir = config.analysis + "/Sample_{sample}/",
         batch = "-l nodes=1:ppn=16,mem=64g", 
         bbsplit_idx = reference.bbsplit_idx,
         bbsplit_path = reference.bbsplit_path,
@@ -111,6 +117,7 @@ rule bbsplit:
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
+        cd {params.workdir}
         python methXsort.py bbsplit \
             --read {input.reads_R1} \
             --read2 {input.reads_R2} \
@@ -121,14 +128,14 @@ rule bbsplit:
             --bbsplit_path {params.bbsplit_path} \
             --bbsplit_index_build 1 \
             --bbsplit_index_path {params.bbsplit_idx} \
-            --bbsplit_extra "scafstats={output.scafstats} refstats={output.refstats}" \
+            --bbsplit_extra "ambiguous=best ambiguous2=split scafstats={output.scafstats} refstats={output.refstats}" \
             > {output.bbsplit_log} 2>&1
         """
 
 rule convert_bam_to_fastq:
     input:
-        bam_hs = "Sample_{sample}/{sample}_hs.bam",
-        bam_mm = "Sample_{sample}/{sample}_mm.bam"
+        bam_hs = rules.bbsplit.output.bam_hs,
+        bam_mm = rules.bbsplit.output.bam_mm
     output:
         fastq_hs_R1 = "Sample_{sample}/{sample}_hs_R1_001.fastq.gz",
         fastq_hs_R2 = "Sample_{sample}/{sample}_hs_R2_001.fastq.gz",
