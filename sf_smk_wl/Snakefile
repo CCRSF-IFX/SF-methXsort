@@ -27,6 +27,11 @@ for searchterm in searchterms:
 
 analysis = config.analysis
 unaligned = config.unaligned
+methXsort_paht = os.path.join(config.analysis, "methXsort.py")
+if not os.path.exists(methXsort_paht):
+    sys.stdout.write("\n\n\nExecution failed: methXsort.py not found in the analysis directory.\n")
+    sys.stdout.write("Please ensure that methXsort.py is present in the analysis directory.\n\n\n")
+    sys.exit(1)
 unalignedfolder = "/" + "/".join(unaligned.split("/")[1:len(unaligned.split("/")) - 1])
 one_up = path.abspath(path.join(os.getcwd(),"../"))
 include: program.runParametersImport
@@ -89,7 +94,7 @@ rule convert_reads:
         """
 module load miniconda
 conda activate {program.methXsort_env_path}
-python methXsort.py convert-reads --read {input.R1} --read2 {input.R2} \
+python {methXsort_paht} convert-reads --read {input.R1} --read2 {input.R2} \
               --out {output.R1} --out2 {output.R2} 
 """
 
@@ -103,11 +108,12 @@ rule bbsplit:
         reads_R1 = rules.convert_reads.output.R1,
         reads_R2 = rules.convert_reads.output.R2
     output: 
-        bbsplit_log = os.path.join(config.analysis, "Sample_{sample}/logs/{sample}_bbsplit.log"),
         bam_hs = os.path.join(config.analysis, "Sample_{sample}/{sample}_hs.bam"),
         bam_mm = os.path.join(config.analysis, "Sample_{sample}/{sample}_mm.bam"),
         scafstats = os.path.join(config.analysis, "Sample_{sample}/{sample}_scafstats.txt"),
         refstats = os.path.join(config.analysis, "Sample_{sample}/{sample}_refstats.txt")
+    log:
+        bbsplit_log = os.path.join(config.analysis, "Sample_{sample}/logs/{sample}_bbsplit.log"),
     params: 
         workdir = config.analysis + "/Sample_{sample}/",
         batch = "-l nodes=1:ppn=16,mem=64g", 
@@ -118,18 +124,17 @@ rule bbsplit:
         module load miniconda
         conda activate {program.methXsort_env_path}
         cd {params.workdir}
-        python methXsort.py bbsplit \
+        python {methXsort_paht} bbsplit \
             --read {input.reads_R1} \
             --read2 {input.reads_R2} \
             --host mm \
             --graft hs \
             --out_host {output.bam_mm} \
             --out_graft {output.bam_hs} \
-            --bbsplit_path {params.bbsplit_path} \
-            --bbsplit_index_build 1 \
-            --bbsplit_index_path {params.bbsplit_idx} \
+            --bbsplit_index_path {params.bbsplit_path} \
+            --bbsplit_index_build {params.bbsplit_idx} \
             --bbsplit_extra "ambiguous=best ambiguous2=split scafstats={output.scafstats} refstats={output.refstats}" \
-            > {output.bbsplit_log} 2>&1
+            > {log.bbsplit_log} 2>&1
         """
 
 rule convert_bam_to_fastq:
@@ -146,8 +151,8 @@ rule convert_bam_to_fastq:
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
-        python methXsort.py bam-to-fastq --out {output.fastq_hs_R1} --out2 {output.fastq_hs_R2} {input.bam_hs}
-        python methXsort.py bam-to-fastq --out {output.fastq_mm_R1} --out2 {output.fastq_mm_R2} {input.bam_mm}
+        python {methXsort_paht} bam-to-fastq --out {output.fastq_hs_R1} --out2 {output.fastq_hs_R2} {input.bam_hs}
+        python {methXsort_paht} bam-to-fastq --out {output.fastq_mm_R1} --out2 {output.fastq_mm_R2} {input.bam_mm}
         """
 
 rule stat_read_number: 
@@ -162,7 +167,7 @@ rule stat_read_number:
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
-        python methXsort.py stat-split {input.raw_R1} {input.fastq_hs_R1} {input.fastq_mm_R1} \
+        python {methXsort_paht} stat-split {input.raw_R1} {input.fastq_hs_R1} {input.fastq_mm_R1} \
            > {output}
         """
 	
