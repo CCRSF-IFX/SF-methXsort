@@ -73,7 +73,7 @@ def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None):
     # For read1: C->T, add original sequence to header (corrected awk command)
     cmd1 = (
         f"zcat {read} | "
-        "awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
+        #"awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
         "sed '2~4s/C/T/g;2~4s/c/t/g' | gzip > {out}"
     ).format(read=read, out=out)
     print(f"[convert-reads] CMD1: {cmd1}", file=sys.stdout)
@@ -82,7 +82,7 @@ def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None):
     if read2 and out2:
         cmd2 = (
             f"zcat {read2} | "
-            "awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
+            #"awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
             "sed '2~4s/G/A/g;2~4s/g/a/g' | gzip > {out2}"
         ).format(read2=read2, out2=out2)
         print(f"[convert-reads] CMD2: {cmd2}", file=sys.stdout)
