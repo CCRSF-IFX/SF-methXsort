@@ -516,6 +516,27 @@ def filter_xengsort_extra(xengsort_extra, used_params):
                 sys.exit(1)
     return xengsort_extra
 
+def run_xengsort_classify(args):
+    """
+    Run xengsort classify with argument checking for redundant parameters in xengsort_extra.
+    """
+    used_params = [
+        "--fastq", "-q", "--pairs", "-p", "--index", "--out", 
+        "-o", "--prefix", "--threads", "-T", "-j"
+    ]
+    filtered_extra = filter_xengsort_extra(args.xengsort_extra, used_params)
+    cmd = (
+        f"{args.xengsort_path} classify "
+        f"--fastq {args.read} "
+        f"{f'--pairs {args.read2} ' if args.read2 else ''}"
+        f"--index {args.index} "
+        f"--out {args.out_prefix} "
+        f"--threads {args.threads} "
+        f"{filtered_extra}"
+    )
+    print(f"[xengsort-classify] CMD: {cmd}", file=sys.stdout)
+    subprocess.check_call(cmd, shell=True)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sort reads into host and graft categories")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -586,6 +607,16 @@ if __name__ == "__main__":
     parser_xengsort_index.add_argument("--xengsort_path", default="xengsort", help="Path to xengsort executable")
     parser_xengsort_index.add_argument("--xengsort_extra", default="", help="Extra parameters for xengsort index command")
 
+    # Subcommand: xengsort-classify
+    parser_xengsort_classify = subparsers.add_parser("xengsort-classify", help="Classify reads using xengsort")
+    parser_xengsort_classify.add_argument("--read", required=True, help="FASTQ file (read 1)")
+    parser_xengsort_classify.add_argument("--read2", help="FASTQ file (read 2, optional)")
+    parser_xengsort_classify.add_argument("--index", required=True, help="xengsort index directory")
+    parser_xengsort_classify.add_argument("--out_prefix", required=True, help="Output prefix for xengsort results")
+    parser_xengsort_classify.add_argument("--threads", default="1", help="Number of threads to use")
+    parser_xengsort_classify.add_argument("--xengsort_path", default="xengsort", help="Path to xengsort executable")
+    parser_xengsort_classify.add_argument("--xengsort_extra", default="", help="Extra parameters for xengsort classify command")
+
     args = parser.parse_args()
 
     if args.command == "convert-ref":
@@ -653,4 +684,6 @@ if __name__ == "__main__":
         )
         print(f"[xengsort-index] CMD: {cmd}", file=sys.stdout)
         subprocess.check_call(cmd, shell=True)
+    elif args.command == "xengsort-classify":
+        run_xengsort_classify(args)
 
