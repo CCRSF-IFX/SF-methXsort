@@ -60,44 +60,70 @@ def convert_fasta(ref_fasta, out_fa=None):
     return out_fa
 
 
-def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None):
+def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None, with_orig_seq=False):
     """
     Fast conversion using awk+sed+gzip for large FASTQ files.
     C->T in read (single or read1), G->A in read2 (if paired-end).
-    Store the original sequence in the header line as an extra field.
+    If with_orig_seq is True, store the original sequence in the header line as an extra field using awk.
     """
     if out is None:
         out = read + ".meth"
     if read2 and out2 is None:
         out2 = read2 + ".meth"
 
-    # For read1: C->T, add original sequence to header (corrected awk command)
-    cmd1 = (
-        f"zcat {read} | "
-        #"awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
-        "sed '2~4s/C/T/g;2~4s/c/t/g' | gzip > {out}"
-    ).format(read=read, out=out)
-    print(f"[convert-reads] CMD1: {cmd1}", file=sys.stdout)
+    if with_orig_seq:
+        # For read1: C->T, add original sequence to header (awk command)
+        cmd1 = (
+            f"zcat {read} | "
+            "awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
+            "sed '2~4s/C/T/g;2~4s/c/t/g' | gzip > {out}"
+        ).format(read=read, out=out)
+        print(f"[convert-reads] CMD1: {cmd1}", file=sys.stdout)
 
-    # For read2: G->A, add original sequence to header (corrected awk command)
-    if read2 and out2:
-        cmd2 = (
-            f"zcat {read2} | "
-            #"awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
-            "sed '2~4s/G/A/g;2~4s/g/a/g' | gzip > {out2}"
-        ).format(read2=read2, out2=out2)
-        print(f"[convert-reads] CMD2: {cmd2}", file=sys.stdout)
-        # Run both commands in parallel
-        p1 = subprocess.Popen(cmd1, shell=True)
-        p2 = subprocess.Popen(cmd2, shell=True)
-        p1.wait()
-        p2.wait()
-        if p1.returncode != 0 or p2.returncode != 0:
-            raise subprocess.CalledProcessError(p1.returncode if p1.returncode != 0 else p2.returncode, cmd1 if p1.returncode != 0 else cmd2)
-        return out, out2
+        # For read2: G->A, add original sequence to header (awk command)
+        if read2 and out2:
+            cmd2 = (
+                f"zcat {read2} | "
+                "awk 'NR%4==1{{getline seq; print $0 \" ORIGINAL_SEQ:\" seq; print seq; getline; print $0; getline; print $0}}' | "
+                "sed '2~4s/G/A/g;2~4s/g/a/g' | gzip > {out2}"
+            ).format(read2=read2, out2=out2)
+            print(f"[convert-reads] CMD2: {cmd2}", file=sys.stdout)
+            # Run both commands in parallel
+            p1 = subprocess.Popen(cmd1, shell=True)
+            p2 = subprocess.Popen(cmd2, shell=True)
+            p1.wait()
+            p2.wait()
+            if p1.returncode != 0 or p2.returncode != 0:
+                raise subprocess.CalledProcessError(p1.returncode if p1.returncode != 0 else p2.returncode, cmd1 if p1.returncode != 0 else cmd2)
+            return out, out2
+        else:
+            subprocess.check_call(cmd1, shell=True)
+            return out
     else:
-        subprocess.check_call(cmd1, shell=True)
-        return out
+        # Default: fast sed-only implementation (no original sequence in header)
+        cmd1 = (
+            f"zcat {read} | "
+            "sed '2~4s/C/T/g;2~4s/c/t/g' | gzip > {out}"
+        ).format(read=read, out=out)
+        print(f"[convert-reads] CMD1: {cmd1}", file=sys.stdout)
+
+        if read2 and out2:
+            cmd2 = (
+                f"zcat {read2} | "
+                "sed '2~4s/G/A/g;2~4s/g/a/g' | gzip > {out2}"
+            ).format(read2=read2, out2=out2)
+            print(f"[convert-reads] CMD2: {cmd2}", file=sys.stdout)
+            # Run both commands in parallel
+            p1 = subprocess.Popen(cmd1, shell=True)
+            p2 = subprocess.Popen(cmd2, shell=True)
+            p1.wait()
+            p2.wait()
+            if p1.returncode != 0 or p2.returncode != 0:
+                raise subprocess.CalledProcessError(p1.returncode if p1.returncode != 0 else p2.returncode, cmd1 if p1.returncode != 0 else cmd2)
+            return out, out2
+        else:
+            subprocess.check_call(cmd1, shell=True)
+            return out
 
 # Old Python implementation (commented out for reference)
 # def convert_reads_c2t_r1_g2a_r2(read, read2=None, out=None, out2=None):
@@ -489,6 +515,8 @@ if __name__ == "__main__":
     parser_reads.add_argument("--read2", help="FASTQ file for read 2 (optional)")
     parser_reads.add_argument("--out", help="Output file for converted read")
     parser_reads.add_argument("--out2", help="Output file for converted read 2")
+    parser_reads.add_argument("--with_orig_seq", action="store_true",
+        help="Include the original sequence in the FASTQ header using awk (slower, but preserves original sequence).")
 
     # Subcommand 3: filter-fastq-by-bam
     parser_bam2fq = subparsers.add_parser("filter-fastq-by-bam", help="Convert BAM to FASTQ using filterbyname.sh and raw reads")
@@ -547,7 +575,7 @@ if __name__ == "__main__":
         # Use the fast awk/sed/gzip implementation
         out = args.out if args.out else args.read + ".meth"
         out2 = args.out2 if args.read2 and args.out2 else (args.read2 + ".meth" if args.read2 else None)
-        convert_reads_c2t_r1_g2a_r2(args.read, args.read2, out, out2)
+        convert_reads_c2t_r1_g2a_r2(args.read, args.read2, out, out2, with_orig_seq=args.with_orig_seq)
     elif args.command == "filter-fastq-by-bam":
         filter_fastq_by_bam(
             read=args.read, read2=args.read2,
