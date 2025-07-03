@@ -121,19 +121,21 @@ rule bbsplit:
         refstats = os.path.join(outdir, "bbsplit/refstats.log"),
     shell:
         """
-
+mkdir -p {outdir}/bbsplit && cd {outdir}/bbsplit && \
 python {methxsort_path} bbsplit \
     --read {input.reads_R1} --read2 {input.reads_R2} \
     --host {host_name} --graft {graft_name} \
     --bbsplit_index_build 1 \
     --bbsplit_index_path {params.bbsplit_index_path} \
     --out_host {output.bam_host} --out_graft {output.bam_graft} \
-    --bbsplit_extra "scafstats={output.scafstats} refstats={output.refstats}" \
+    --bbsplit_extra "ambiguous=best ambiguous2=split scafstats={output.scafstats} refstats={output.refstats}" \
     > {output.bbsplit_log} 2>&1
 """
 
 rule convert_bam_to_fastq:
     input:
+        R1 = rules.merge_graft_host.output.merged_R1,
+        R2 = rules.merge_graft_host.output.merged_R2,
         bam_graft = rules.bbsplit.output.bam_graft,
         bam_host = rules.bbsplit.output.bam_host,
     output:
@@ -143,10 +145,14 @@ rule convert_bam_to_fastq:
         fastq_host_R2 = os.path.join(outdir, "fastq/bbsplit_host_R2.fastq.gz"),
     shell:
         """
-python {methxsort_path} bam-to-fastq \
-    --out {output.fastq_graft_R1} --out2 {output.fastq_graft_R2} {input.bam_graft}
-python {methxsort_path} bam-to-fastq \
-    --out {output.fastq_host_R1} --out2 {output.fastq_host_R2} {input.bam_host}
+python {methxsort_path} filter-fastq-by-bam \
+    --read {input.R1} --read2 {input.R2} \
+    --bam {input.bam_graft} \
+    --out {output.fastq_graft_R1} --out2 {output.fastq_graft_R2} 
+python {methxsort_path} filter-fastq-by-bam \
+    --read {input.R1} --read2 {input.R2} \
+    --bam {input.bam_host} \
+    --out {output.fastq_host_R1} --out2 {output.fastq_host_R2}
 """
 
 rule stat_read_number: 
