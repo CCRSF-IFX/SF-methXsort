@@ -335,6 +335,14 @@ def run_bbsplit(read1, read2, host, graft, out_host, out_graft,
     """
     if not out_host.lower().endswith(".bam") or not out_graft.lower().endswith(".bam"):
         raise ValueError("Output files must have .bam suffix.")
+    
+    # Check for AMBIGUOUS BAM files before running bbsplit
+    ambiguous_host = "AMBIGUOUS_" + os.path.basename(out_host)
+    ambiguous_graft = "AMBIGUOUS_" + os.path.basename(out_graft)
+    for amb_file in [ambiguous_host, ambiguous_graft]:
+        if os.path.exists(amb_file):
+            sys.stderr.write(f"Error: {amb_file} already exists. Please remove or rename it before proceeding.\n")
+            sys.exit(1)
 
     cmd = (
         f"{bbsplit_path} build={bbsplit_index_build} "
