@@ -501,7 +501,7 @@ if __name__ == "__main__":
     parser_bbsplit.add_argument("--out_graft", required=True, help="Output BAM file for graft")
     parser_bbsplit.add_argument("--bbsplit_path", default="bbsplit.sh", help="Path to bbsplit.sh")
     parser_bbsplit.add_argument("--bbsplit_extra", 
-                                default="ambiguous=best ambiguous2=toss", 
+                                default="ambiguous=best ambiguous2=split", 
                                 help="Extra parameters for bbsplit.sh")
     parser_bbsplit.add_argument("--bbsplit_index_build", default=1, help="bbsplit index build (default: 1)")
     parser_bbsplit.add_argument("--bbsplit_index_path", default="bbsplit_index", help="bbsplit index path (default: bbsplit_index)")
