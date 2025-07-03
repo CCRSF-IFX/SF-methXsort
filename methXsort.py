@@ -12,6 +12,7 @@ from multiprocessing import Pool, cpu_count
 import subprocess
 import shlex
 import pathlib
+import re
 
 def wrap(seq, width=60):
     return [seq[i:i+width] for i in range(0, len(seq), width)]
