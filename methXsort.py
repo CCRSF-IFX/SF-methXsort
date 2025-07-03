@@ -500,6 +500,22 @@ def filter_fastq_by_bam(read, bamfile, out, filterbyname_path="filterbyname.sh",
         print(f"[bam-to-fastq] CMD: {cmd}", file=sys.stdout)
         subprocess.check_call(cmd, shell=True)
 
+def filter_xengsort_extra(xengsort_extra, used_params):
+    """
+    Remove any parameters from xengsort_extra that are already provided by main args.
+    If any are found, error out with a clear message.
+    """
+    tokens = shlex.split(xengsort_extra)
+    for i, token in enumerate(tokens):
+        # Check for direct match or --param=value style
+        for pat in used_params:
+            if token == pat or (pat.startswith("--") and token.startswith(pat + "=")):
+                sys.stderr.write(
+                    f"Error: Parameter '{pat}' is already provided by main arguments and should not be included in --xengsort_extra.\n"
+                )
+                sys.exit(1)
+    return xengsort_extra
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sort reads into host and graft categories")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -558,6 +574,18 @@ if __name__ == "__main__":
     parser_stat_split.add_argument("--host", required=True, help="Host FASTQ file (R1)")
     parser_stat_split.add_argument("--graft", required=True, help="Graft FASTQ file (R1)")
 
+    # Subcommand: xengsort-index
+    parser_xengsort_index = subparsers.add_parser("xengsort-index", help="Build xengsort index from converted reference FASTA files")
+    parser_xengsort_index.add_argument("--host", required=True, help="Converted host reference FASTA file")
+    parser_xengsort_index.add_argument("--graft", required=True, help="Converted graft reference FASTA file")
+    parser_xengsort_index.add_argument("--index", required=True, help="Output xengsort index directory")
+    parser_xengsort_index.add_argument("--n", default="7000000000", help="Number of slots in hash table (default: 7_000_000_000)")
+    parser_xengsort_index.add_argument("--fill", default="0.88", help="Fill factor (default: 0.88)")
+    parser_xengsort_index.add_argument("--statistics", default="full", help="Statistics level (default: full)")
+    parser_xengsort_index.add_argument("-k", default="25", help="k-mer size (default: 25)")
+    parser_xengsort_index.add_argument("--xengsort_path", default="xengsort", help="Path to xengsort executable")
+    parser_xengsort_index.add_argument("--xengsort_extra", default="", help="Extra parameters for xengsort index command")
+
     args = parser.parse_args()
 
     if args.command == "convert-ref":
@@ -607,4 +635,22 @@ if __name__ == "__main__":
         )
     elif args.command == "stat-split":
         stat_split(args.raw, args.host, args.graft)
+    elif args.command == "xengsort-index":
+        used_params = [
+            "-H", "--host", "-G", "--graft", "-n", "--nobjects", "--fill", "--statistics", "--stats", "-k", "--kmersize", "--index"
+        ]
+        filtered_extra = filter_xengsort_extra(args.xengsort_extra, used_params)
+        cmd = (
+            f"{args.xengsort_path} index "
+            f"-H {args.host} "
+            f"-G {args.graft} "
+            f"-n {args.n} "
+            f"--fill {args.fill} "
+            f"--statistics {args.statistics} "
+            f"-k {args.k} "
+            f"--index {args.index} "
+            f"{filtered_extra}"
+        )
+        print(f"[xengsort-index] CMD: {cmd}", file=sys.stdout)
+        subprocess.check_call(cmd, shell=True)
 
