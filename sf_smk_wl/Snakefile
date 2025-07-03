@@ -137,29 +137,35 @@ rule bbsplit:
             > {log.bbsplit_log} 2>&1
         """
 
-rule convert_bam_to_fastq:
+rule filter_fastq_by_bam:
     input:
+        R1 = makefilebase + "{sample}_R1_001.fastq.gz",
+        R2 = makefilebase + "{sample}_R2_001.fastq.gz",
         bam_hs = rules.bbsplit.output.bam_hs,
-        bam_mm = rules.bbsplit.output.bam_mm
+        bam_mm = rules.bbsplit.output.bam_mm,
     output:
-        fastq_hs_R1 = "Sample_{sample}/{sample}_hs_R1_001.fastq.gz",
-        fastq_hs_R2 = "Sample_{sample}/{sample}_hs_R2_001.fastq.gz",
-        fastq_mm_R1 = "Sample_{sample}/{sample}_mm_R1_001.fastq.gz",
-        fastq_mm_R2 = "Sample_{sample}/{sample}_mm_R2_001.fastq.gz"
-    params: batch = "-l nodes=1:ppn=16,mem=64g",
+        fastq_hs_R1 = os.path.join(outdir, "fastq/bbsplit_hs_R1.fastq.gz"),
+        fastq_hs_R2 = os.path.join(outdir, "fastq/bbsplit_hs_R2.fastq.gz"),
+        fastq_mm_R1 = os.path.join(outdir, "fastq/bbsplit_mm_R1.fastq.gz"),
+        fastq_mm_R2 = os.path.join(outdir, "fastq/bbsplit_mm_R2.fastq.gz"),
     shell:
         """
-        module load miniconda
-        conda activate {program.methXsort_env_path}
-        python {methXsort_paht} bam-to-fastq --out {output.fastq_hs_R1} --out2 {output.fastq_hs_R2} {input.bam_hs}
-        python {methXsort_paht} bam-to-fastq --out {output.fastq_mm_R1} --out2 {output.fastq_mm_R2} {input.bam_mm}
-        """
+python {methxsort_path} filter-fastq-by-bam \
+    --read {input.R1} --read2 {input.R2} \
+    --bam {input.bam_hs} \
+    --out {output.fastq_hs_R1} --out2 {output.fastq_hs_R2}
+
+python {methxsort_path} filter-fastq-by-bam \
+    --read {input.R1} --read2 {input.R2} \
+    --bam {input.bam_mm} \
+    --out {output.fastq_mm_R1} --out2 {output.fastq_mm_R2}
+"""
 
 rule stat_read_number: 
     input: 
         raw_R1 = makefilebase + "{sample}_R1_001.fastq.gz", 
-        fastq_hs_R1 = rules.convert_bam_to_fastq.output.fastq_hs_R1,
-        fastq_mm_R1 = rules.convert_bam_to_fastq.output.fastq_mm_R1
+        fastq_hs_R1 = rules.filter_fastq_by_bam.output.fastq_hs_R1,
+        fastq_mm_R1 = rules.filter_fastq_by_bam.output.fastq_mm_R1
     output: 
         "Sample_{sample}/{sample}_read_number.txt"
     params: batch = "-l nodes=1:ppn=16,mem=64g"
