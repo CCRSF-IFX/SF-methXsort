@@ -79,7 +79,7 @@ with open(config.analysis + '/cluster.json') as file:
 
 rule all:
     input: 
-        expand("Sample_{sample}/{sample}_read_number.txt", sample=samples), 
+        expand("Sample_{sample}/{sample}_stat_read_number.txt", sample=samples), 
         one_up + "/meta2json_complete.txt",
         
         
@@ -136,10 +136,10 @@ rule restore_fastq:
         fq_host_R2 = os.path.join(config.analysis, "Sample_{sample}/{sample}_host_R2_001.fastq.gz"),
     shell:
         """
-python {methxsort_path} restore-fastq \
+python {methXsort_path} restore-fastq \
     --read {input.R1_graft} --read2 {input.R2_graft} \
     --out {output.fq_graft_R1} --out2 {output.fq_graft_R2} 
-python {methxsort_path} restore-fastq \
+python {methXsort_path} restore-fastq \
     --read {input.R1_host} --read2 {input.R2_host} \
     --out {output.fq_host_R1} --out2 {output.fq_host_R2}
 """
