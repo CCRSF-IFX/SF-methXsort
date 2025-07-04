@@ -6,6 +6,13 @@
         "time" : "96:00:00",
         "threads": "4"
     },
+    "xengsort_classify" :
+    {
+        "partition": "norm",
+        "mem" : "700g",
+        "time" : "120:00:00",
+        "threads": "34"
+    },
     "bbsplit" :
     {
         "partition": "norm",
