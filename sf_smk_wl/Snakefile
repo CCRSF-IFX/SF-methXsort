@@ -115,7 +115,7 @@ rule xengsort_classify:
         classify_log = os.path.join(config.analysis, "Sample_{sample}/xengsort_classify_{sample}.log"),
     shell:
         """
-python {methxsort_path} xengsort-classify \
+python {methXsort_path} xengsort-classify \
     --read {input.reads_R1} --read2 {input.reads_R2} \
     --index {xengsort_index_prefix} \
     --out_prefix {params.xengsort_out_prefix} \
