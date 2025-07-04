@@ -638,7 +638,7 @@ if __name__ == "__main__":
     parser_xengsort_index.add_argument("--host", required=True, help="Converted host reference FASTA file")
     parser_xengsort_index.add_argument("--graft", required=True, help="Converted graft reference FASTA file")
     parser_xengsort_index.add_argument("--index", required=True, help="Output xengsort index directory")
-    parser_xengsort_index.add_argument("--n", default="7000000000", help="Number of slots in hash table (default: 7_000_000_000)")
+    parser_xengsort_index.add_argument("-n", default="7000000000", help="Number of slots in hash table (default: 7_000_000_000)")
     parser_xengsort_index.add_argument("--fill", default="0.88", help="Fill factor (default: 0.88)")
     parser_xengsort_index.add_argument("--statistics", default="full", help="Statistics level (default: full)")
     parser_xengsort_index.add_argument("-k", default="25", help="k-mer size (default: 25)")
