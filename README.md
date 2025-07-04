@@ -134,12 +134,6 @@ python methXsort.py restore-fastq --read <classified_R1.fq.gz> --out <restored_R
 
 ---
 
-## License
-
-MIT License
-
----
-
 ## Contact
 
 Email: ccrsfifx@nih.gov
