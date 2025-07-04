@@ -549,13 +549,13 @@ def restore_fastq_from_xengsort(read, out, read2=None, out2=None):
     if read2 and out2:
         cmd1 = (
             f"zcat {read} | "
-            "awk 'NR%4==1{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]} "
-            "NR%4==2{seq=$0} NR%4==3{plus=$0} NR%4==0{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}' | gzip > {out}"
+            "awk 'NR%4==1{{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]}} "
+            "NR%4==2{{seq=$0}} NR%4==3{{plus=$0}} NR%4==0{{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}}' | gzip > {out}"
         ).format(out=out)
         cmd2 = (
             f"zcat {read2} | "
-            "awk 'NR%4==1{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]} "
-            "NR%4==2{seq=$0} NR%4==3{plus=$0} NR%4==0{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}' | gzip > {out2}"
+            "awk 'NR%4==1{{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]}} "
+            "NR%4==2{{seq=$0}} NR%4==3{{plus=$0}} NR%4==0{{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}}' | gzip > {out2}"
         ).format(out2=out2)
         print(f"[restore-fastq] CMD1: {cmd1}", file=sys.stdout)
         print(f"[restore-fastq] CMD2: {cmd2}", file=sys.stdout)
@@ -569,8 +569,8 @@ def restore_fastq_from_xengsort(read, out, read2=None, out2=None):
         # Single-end: use awk
         cmd = (
             f"zcat {read} | "
-            "awk 'NR%4==1{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]} "
-            "NR%4==2{seq=$0} NR%4==3{plus=$0} NR%4==0{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}' | gzip > {out}"
+            "awk 'NR%4==1{{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]}} "
+            "NR%4==2{{seq=$0}} NR%4==3{{plus=$0}} NR%4==0{{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}}' | gzip > {out}"
         ).format(out=out)
         print(f"[restore-fastq] CMD: {cmd}", file=sys.stdout)
         subprocess.check_call(cmd, shell=True, executable="/bin/bash")
