@@ -537,6 +537,44 @@ def run_xengsort_classify(args):
     print(f"[xengsort-classify] CMD: {cmd}", file=sys.stdout)
     subprocess.check_call(cmd, shell=True)
 
+def restore_fastq_from_xengsort(read, out, read2=None, out2=None):
+    """
+    Restore original sequences in FASTQ files classified by xengsort.
+    The input FASTQ should have the original sequence in the header as 'ORIGINAL_SEQ:...'.
+    The output FASTQ will have the original sequence as the sequence line, and the header will be cleaned.
+    If read2 and out2 are provided, process both files in parallel using paste+awk for speed.
+    """
+    import subprocess
+
+    if read2 and out2:
+        cmd1 = (
+            f"zcat {read} | "
+            "awk 'NR%4==1{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]} "
+            "NR%4==2{seq=$0} NR%4==3{plus=$0} NR%4==0{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}' | gzip > {out}"
+        ).format(out=out)
+        cmd2 = (
+            f"zcat {read2} | "
+            "awk 'NR%4==1{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]} "
+            "NR%4==2{seq=$0} NR%4==3{plus=$0} NR%4==0{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}' | gzip > {out2}"
+        ).format(out2=out2)
+        print(f"[restore-fastq] CMD1: {cmd1}", file=sys.stdout)
+        print(f"[restore-fastq] CMD2: {cmd2}", file=sys.stdout)
+        p1 = subprocess.Popen(cmd1, shell=True, executable="/bin/bash")
+        p2 = subprocess.Popen(cmd2, shell=True, executable="/bin/bash")
+        p1.wait()
+        p2.wait()
+        if p1.returncode != 0 or p2.returncode != 0:
+            raise subprocess.CalledProcessError(p1.returncode if p1.returncode != 0 else p2.returncode, cmd1 if p1.returncode != 0 else cmd2)
+    else:
+        # Single-end: use awk
+        cmd = (
+            f"zcat {read} | "
+            "awk 'NR%4==1{split($0, h, \" ORIGINAL_SEQ:\"); header=h[1]; orig_seq=h[2]} "
+            "NR%4==2{seq=$0} NR%4==3{plus=$0} NR%4==0{qual=$0; print header \"\\n\" orig_seq \"\\n\" plus \"\\n\" qual}' | gzip > {out}"
+        ).format(out=out)
+        print(f"[restore-fastq] CMD: {cmd}", file=sys.stdout)
+        subprocess.check_call(cmd, shell=True, executable="/bin/bash")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sort reads into host and graft categories")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -616,6 +654,13 @@ if __name__ == "__main__":
     parser_xengsort_classify.add_argument("--threads", default="1", help="Number of threads to use")
     parser_xengsort_classify.add_argument("--xengsort_path", default="xengsort", help="Path to xengsort executable")
     parser_xengsort_classify.add_argument("--xengsort_extra", default="", help="Extra parameters for xengsort classify command")
+    
+    # Update argparse subcommand
+    parser_restore = subparsers.add_parser("restore-fastq", help="Restore original sequences in FASTQ files classified by xengsort")
+    parser_restore.add_argument("--read", required=True, help="Input FASTQ file with ORIGINAL_SEQ in header (read 1)")
+    parser_restore.add_argument("--out", required=True, help="Output FASTQ file with restored sequences (read 1)")
+    parser_restore.add_argument("--read2", help="Input FASTQ file with ORIGINAL_SEQ in header (read 2, optional)")
+    parser_restore.add_argument("--out2", help="Output FASTQ file with restored sequences (read 2, optional)")
 
     args = parser.parse_args()
 
@@ -686,4 +731,6 @@ if __name__ == "__main__":
         subprocess.check_call(cmd, shell=True)
     elif args.command == "xengsort-classify":
         run_xengsort_classify(args)
+    elif args.command == "restore-fastq":
+        restore_fastq_from_xengsort(args.read, args.out, args.read2, args.out2)
 
