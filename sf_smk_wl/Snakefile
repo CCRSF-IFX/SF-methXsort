@@ -27,8 +27,9 @@ for searchterm in searchterms:
 
 analysis = config.analysis
 unaligned = config.unaligned
-methXsort_paht = os.path.join(config.analysis, "methXsort.py")
-if not os.path.exists(methXsort_paht):
+xengsort_index_prefix = reference.xengsort_index_prefix
+methXsort_path = os.path.join(config.analysis, "methXsort.py")
+if not os.path.exists(methXsort_path):
     sys.stdout.write("\n\n\nExecution failed: methXsort.py not found in the analysis directory.\n")
     sys.stdout.write("Please ensure that methXsort.py is present in the analysis directory.\n\n\n")
     sys.exit(1)
@@ -94,86 +95,68 @@ rule convert_reads:
         """
 module load miniconda
 conda activate {program.methXsort_env_path}
-python {methXsort_paht} convert-reads --read {input.R1} --read2 {input.R2} \
-              --out {output.R1} --out2 {output.R2} 
+python {methXsort_path} convert-reads --with_orig_seq \
+    --read {input.R1} --read2 {input.R2} \
+    --out {output.R1} --out2 {output.R2} 
 """
 
-rule bbsplit:
-    """
-    Split reads into human (graft) and mouse (host) using bbsplit.
-    With the `ambiguus2=split` option, reads that map to both genomes outputted into: 
-    #AMBIGUOUS_bbsplit_graft.bam  AMBIGUOUS_bbsplit_host.bam
-    """
-    input: 
+rule xengsort_classify:
+    input:
         reads_R1 = rules.convert_reads.output.R1,
         reads_R2 = rules.convert_reads.output.R2
-    output: 
-        bam_hs = os.path.join(config.analysis, "Sample_{sample}/{sample}_hs.bam"),
-        bam_mm = os.path.join(config.analysis, "Sample_{sample}/{sample}_mm.bam"),
-        scafstats = os.path.join(config.analysis, "Sample_{sample}/{sample}_scafstats.txt"),
-        refstats = os.path.join(config.analysis, "Sample_{sample}/{sample}_refstats.txt")
-    log:
-        bbsplit_log = os.path.join(config.analysis, "Sample_{sample}/logs/{sample}_bbsplit.log"),
-    params: 
-        workdir = config.analysis + "/Sample_{sample}/",
-        batch = "-l nodes=1:ppn=16,mem=64g", 
-        bbsplit_idx = reference.bbsplit_idx,
-        bbsplit_path = reference.bbsplit_path,
-    shell: 
-        """
-        module load miniconda
-        conda activate {program.methXsort_env_path}
-        cd {params.workdir}
-        python {methXsort_paht} bbsplit \
-            --read {input.reads_R1} \
-            --read2 {input.reads_R2} \
-            --host mm \
-            --graft hs \
-            --out_host {output.bam_mm} \
-            --out_graft {output.bam_hs} \
-            --bbsplit_index_path {params.bbsplit_path} \
-            --bbsplit_index_build {params.bbsplit_idx} \
-            --bbsplit_extra "ambiguous=best ambiguous2=split scafstats={output.scafstats} refstats={output.refstats}" \
-            > {log.bbsplit_log} 2>&1
-        """
-
-rule filter_fastq_by_bam:
-    input:
-        R1 = makefilebase + "{sample}_R1_001.fastq.gz",
-        R2 = makefilebase + "{sample}_R2_001.fastq.gz",
-        bam_hs = rules.bbsplit.output.bam_hs,
-        bam_mm = rules.bbsplit.output.bam_mm,
+    params:
+        xengsort_out_prefix = os.path.join(config.analysis, "Sample_{sample}/{sample}"),
     output:
-        fastq_hs_R1 = os.path.join(outdir, "fastq/bbsplit_hs_R1.fastq.gz"),
-        fastq_hs_R2 = os.path.join(outdir, "fastq/bbsplit_hs_R2.fastq.gz"),
-        fastq_mm_R1 = os.path.join(outdir, "fastq/bbsplit_mm_R1.fastq.gz"),
-        fastq_mm_R2 = os.path.join(outdir, "fastq/bbsplit_mm_R2.fastq.gz"),
+        fq_graft_R1 = os.path.join(config.analysis, "Sample_{sample}/{sample}-graft.1.fq.gz"),
+        fq_graft_R2 = os.path.join(config.analysis, "Sample_{sample}/{sample}-graft.2.fq.gz"),
+        fq_host_R1 = os.path.join(config.analysis, "Sample_{sample}/{sample}-host.1.fq.gz"),
+        fq_host_R2 = os.path.join(config.analysis, "Sample_{sample}/{sample}-host.2.fq.gz"),
+    log:
+        classify_log = os.path.join(config.analysis, "Sample_{sample}/xengsort_classify_{sample}.log"),
     shell:
         """
-python {methxsort_path} filter-fastq-by-bam \
-    --read {input.R1} --read2 {input.R2} \
-    --bam {input.bam_hs} \
-    --out {output.fastq_hs_R1} --out2 {output.fastq_hs_R2}
+python {methxsort_path} xengsort-classify \
+    --read {input.reads_R1} --read2 {input.reads_R2} \
+    --index {xengsort_index_prefix} \
+    --out_prefix {params.xengsort_out_prefix} \
+    --threads 33 \
+    > {log.classify_log} 2>&1
+"""
 
-python {methxsort_path} filter-fastq-by-bam \
-    --read {input.R1} --read2 {input.R2} \
-    --bam {input.bam_mm} \
-    --out {output.fastq_mm_R1} --out2 {output.fastq_mm_R2}
+rule restore_fastq:
+    input:
+        R1_graft = rules.xengsort_classify.output.fq_graft_R1,
+        R2_graft = rules.xengsort_classify.output.fq_graft_R2,
+        R1_host = rules.xengsort_classify.output.fq_host_R1,
+        R2_host = rules.xengsort_classify.output.fq_host_R2,
+    output:
+        fq_graft_R1 = os.path.join(config.analysis, "Sample_{sample}/{sample}_graft_R1_001.fastq.gz"),
+        fq_graft_R2 = os.path.join(config.analysis, "Sample_{sample}/{sample}_graft_R2_001.fastq.gz"),
+        fq_host_R1 = os.path.join(config.analysis, "Sample_{sample}/{sample}_host_R1_001.fastq.gz"),
+        fq_host_R2 = os.path.join(config.analysis, "Sample_{sample}/{sample}_host_R2_001.fastq.gz"),
+    shell:
+        """
+python {methxsort_path} restore-fastq \
+    --read {input.R1_graft} --read2 {input.R2_graft} \
+    --out {output.fq_graft_R1} --out2 {output.fq_graft_R2} 
+python {methxsort_path} restore-fastq \
+    --read {input.R1_host} --read2 {input.R2_host} \
+    --out {output.fq_host_R1} --out2 {output.fq_host_R2}
 """
 
 rule stat_read_number: 
     input: 
         raw_R1 = makefilebase + "{sample}_R1_001.fastq.gz", 
-        fastq_hs_R1 = rules.filter_fastq_by_bam.output.fastq_hs_R1,
-        fastq_mm_R1 = rules.filter_fastq_by_bam.output.fastq_mm_R1
+        fq_graft_R1 = rules.restore_fastq.output.fq_graft_R1,
+        fq_host_R1 = rules.restore_fastq.output.fq_host_R1
     output: 
-        "Sample_{sample}/{sample}_read_number.txt"
+            "Sample_{sample}/{sample}_stat_read_number.txt"
     params: batch = "-l nodes=1:ppn=16,mem=64g"
     shell: 
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
-        python {methXsort_paht} stat-split {input.raw_R1} {input.fastq_hs_R1} {input.fastq_mm_R1} \
+        python {methXsort_path} stat-split {input.raw_R1} {input.fq_graft_R1} {input.fq_host_R1} \
            > {output}
         """
 	
