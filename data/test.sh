@@ -14,3 +14,6 @@ python /mnt/ccrsf-ifx/Software/github/methXsort/methXsort.py bbsplit    \
 	 --out_host test_host.bam     \
 	 --out_graft test_graft.bam    \
          --bbsplit_extra "scafstats=scafstats.log refstats=refstats.log"  > bbsplit.log 2>&1
+
+
+ntcard -k 25 -o ntcard_freq.txt ecoli.fa ehec.fa  > ntcard_freq.log
