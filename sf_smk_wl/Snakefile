@@ -160,7 +160,7 @@ rule stat_read_number:
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
-        python {methXsort_path} stat-split {input.raw_R1} {input.fq_graft_R1} {input.fq_host_R1} \
+        python {methXsort_path} stat-split --raw {input.raw_R1} --graft {input.fq_graft_R1} --host {input.fq_host_R1} \
            > {output}
         """
 	
