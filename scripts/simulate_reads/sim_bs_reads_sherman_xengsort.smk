@@ -158,11 +158,15 @@ rule stat_read_number:
         fastq_host_R1 = rules.convert_restore_fastq.output.fastq_host_R1
     output: 
         read_number_stat = os.path.join(outdir, "read_number_stat.txt")
-    params: batch = "-l nodes=1:ppn=16,mem=64g"
+    params: 
+        batch = "-l nodes=1:ppn=16,mem=64g",
+        xengsort_out_prefix = os.path.join(outdir, "xengsort_classify/xengsort_classify"),
     shell: 
         """
 python {methxsort_path} stat-split --raw {input.raw_R1} \
              --graft {input.fastq_graft_R1} --host {input.fastq_host_R1} \
+             --xengsort_prefix {params.xengsort_out_prefix} \
+             --sample_name "simulation_100k" \
               > {output.read_number_stat}
 """
 

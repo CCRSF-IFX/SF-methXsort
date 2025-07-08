@@ -8,4 +8,4 @@ methxsort_path: /mnt/ccrsf-ifx/Software/github/methXsort/methXsort.py
 sherman_path: "/mnt/ccrsf-ifx/Software/tools/Sherman/v0.1.8/Sherman"
 stat_accuracy_path: "/mnt/ccrsf-ifx/Software/github/methXsort/scripts/simulate_reads/stat_accuracy.py"
 
-xengsort_index_prefix: /mnt/ccrsf-ifx/RefGenomes/dragen_ref/xenoxsort/methxsort_xengsort_index_converted/methxsort_index_xs_convert
+xengsort_index_prefix: /mnt/ccrsf-ifx/RefGenomes/dragen_ref/xenoxsort/methxsort_xengsort_index_converted/methxsort_index_xs_convert_70B
