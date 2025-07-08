@@ -1,5 +1,5 @@
 # File: .github/workflows/publish.yml
-name: Publish Python Package
+name: publish methxsort package
 
 on:
   release:
@@ -22,6 +22,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install build
+        pip install setuptools 
 
     - name: Build package
       run: python -m build
