@@ -81,6 +81,7 @@ rule all:
     input: 
         expand("Sample_{sample}/{sample}_stat_read_number.txt", sample=samples), 
         one_up + "/meta2json_complete.txt",
+        expand(os.path.join(config.analysis, "Sample_{sample}/xengsort_summary_{sample}.csv"), sample=samples),
         
         
 rule convert_reads:
@@ -125,6 +126,19 @@ python {methXsort_path} xengsort-classify \
     > {log.classify_log} 2>&1
 """
 
+rule parse_xengsort_summary:
+    input:
+        classify_log = rules.xengsort_classify.log.classify_log
+    output:
+        summary_csv = os.path.join(config.analysis, "Sample_{sample}/xengsort_summary_{sample}.csv")
+    shell:
+        """
+module load miniconda
+conda activate {program.methXsort_env_path}
+python {methXsort_path} parse-xengsort-summary \
+    --xengsort_summary {input.classify_log} --outfile {output.summary_csv}
+"""
+
 rule restore_fastq:
     input:
         R1_graft = rules.xengsort_classify.output.fq_graft_R1,
@@ -154,13 +168,17 @@ rule stat_read_number:
         fq_graft_R1 = rules.restore_fastq.output.fq_graft_R1,
         fq_host_R1 = rules.restore_fastq.output.fq_host_R1
     output: 
-            "Sample_{sample}/{sample}_stat_read_number.txt"
-    params: batch = "-l nodes=1:ppn=16,mem=64g"
+        "Sample_{sample}/{sample}_stat_read_number.txt"
+    params: 
+        batch = "-l nodes=1:ppn=16,mem=64g",
+        xengsort_outprefix =  os.path.join(config.analysis, "Sample_{sample}/{sample}")
     shell: 
         """
         module load miniconda
         conda activate {program.methXsort_env_path}
         python {methXsort_path} stat-split --raw {input.raw_R1} --graft {input.fq_graft_R1} --host {input.fq_host_R1} \
+           --sample_name {wildcards.sample} \
+           --xengsort_prefix {params.xengsort_outprefix} \
            > {output}
         """
 	
