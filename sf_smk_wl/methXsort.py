@@ -440,21 +440,36 @@ def fastq_count(filename):
     n_lines = int(subprocess.check_output(cmd, shell=True).decode().strip())
     return n_lines // 4
 
-def stat_split(raw_fastq, host_fastq, graft_fastq):
+def stat_split(raw_fastq, host_fastq, graft_fastq, xengsort_prefix=None, sample_name=None):
     """
     Output CSV with sample name, raw read number, host read number, graft read number, percent graft.
-    Uses fastq_count for efficient counting.
+    If xengsort_prefix is provided, also count both/neither/ambiguous reads from xengsort output.
     """
     import os
-
-    sample_name = os.path.basename(raw_fastq).split('_')[0]
     n_raw = fastq_count(raw_fastq)
     n_host = fastq_count(host_fastq)
     n_graft = fastq_count(graft_fastq)
     percent_graft = (n_graft / n_raw * 100) if n_raw else 0
 
-    print("Sample_name,raw_read_number,host_read_number,graft_read_number,percent_graft")
-    print(f"{sample_name},{n_raw},{n_host},{n_graft},{percent_graft:.2f}")
+    print("Sample_name,raw_read_number,host_read_number,graft_read_number,percent_graft", end="")
+    if xengsort_prefix:
+        print(",both_read_number,neither_read_number,ambiguous_read_number")
+    else:
+        print()
+
+    print(f"{sample_name},{n_raw},{n_host},{n_graft},{percent_graft:.2f}", end="")
+
+    if xengsort_prefix:
+        def count_xengsort_reads(suffix):
+            fname = f"{xengsort_prefix}-{suffix}.1.fq.gz"
+            return fastq_count(fname) if os.path.exists(fname) else "NA"
+
+        n_both = count_xengsort_reads("both")
+        n_neither = count_xengsort_reads("neither")
+        n_ambiguous = count_xengsort_reads("ambiguous")
+        print(f",{n_both},{n_neither},{n_ambiguous}")
+    else:
+        print()
 
 def filter_fastq_by_bam(read, bamfile, out, filterbyname_path="filterbyname.sh", read2=None, out2=None):
     """
@@ -575,6 +590,90 @@ def restore_fastq_from_xengsort(read, out, read2=None, out2=None):
         print(f"[restore-fastq] CMD: {cmd}", file=sys.stdout)
         subprocess.check_call(cmd, shell=True, executable="/bin/bash")
 
+# def parse_xengsort_summary(logfile, outfile):
+#     """
+#     Parse xengsort log file and write the Classification Statistics table as CSV.
+#     """
+#     import csv
+
+#     stats_started = False
+#     header = []
+#     row = []
+#     with open(logfile) as f:
+#         for line in f:
+#             line = line.strip()
+#             if not stats_started:
+#                 if line.startswith("prefix") and "host" in line and "graft" in line:
+#                     header = line.split()
+#                     stats_started = True
+#             elif stats_started and line and not line.startswith("|"):
+#                 # This is the data row
+#                 row = line.split()
+#                 break  # Only the first data row is needed
+
+#     if not header or not row:
+#         sys.stderr.write("Error: Could not find Classification Statistics in log file.\n")
+#         sys.exit(1)
+
+#     # Write to CSV
+#     with open(outfile, "w", newline="") as csvfile:
+#         writer = csv.writer(csvfile)
+#         writer.writerow(header)
+#         writer.writerow(row)
+
+#     print(f"Classification statistics written to {outfile}")
+
+def parse_xengsort_summary_table(logfile, outfile):
+    """
+    Parse the vertical table from xengsort log and write as CSV.
+    Only the section with | prefix | host | graft | ambiguous | both | neither | is parsed.
+    """
+    import csv
+
+    data = {}
+    with open(logfile) as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("| prefix"):
+                # Prefix line
+                parts = line.split("|")
+                if len(parts) > 2:
+                    data["prefix"] = parts[2].strip().split("/")[-1]  # Get the last part of the prefix
+            elif line.startswith("| host"):
+                parts = line.split("|")
+                if len(parts) > 2:
+                    data["host"] = parts[2].strip()
+                    data["host_pct"] = parts[3].strip(" %|")
+            elif line.startswith("| graft"):
+                parts = line.split("|")
+                if len(parts) > 2:
+                    data["graft"] = parts[2].strip()
+                    data["graft_pct"] = parts[3].strip(" %|")
+            elif line.startswith("| ambiguous"):
+                parts = line.split("|")
+                if len(parts) > 2:
+                    data["ambiguous"] = parts[2].strip()
+                    data["ambiguous_pct"] = parts[3].strip(" %|")
+            elif line.startswith("| both"):
+                parts = line.split("|")
+                if len(parts) > 2:
+                    data["both"] = parts[2].strip()
+                    data["both_pct"] = parts[3].strip(" %|")
+            elif line.startswith("| neither"):
+                parts = line.split("|")
+                if len(parts) > 2:
+                    data["neither"] = parts[2].strip()
+                    data["neither_pct"] = parts[3].strip(" %|")
+
+    # Write to CSV
+    header = ["prefix", "host", "host_pct", "graft", "graft_pct", "ambiguous", "ambiguous_pct", "both", "both_pct", "neither", "neither_pct"]
+    with open(outfile, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(header)
+        writer.writerow([data.get(col, "") for col in header])
+
+    print(f"Classification statistics (vertical table) written to {outfile}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sort reads into host and graft categories")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -632,6 +731,8 @@ if __name__ == "__main__":
     parser_stat_split.add_argument("--raw", required=True, help="Raw FASTQ file (R1)")
     parser_stat_split.add_argument("--host", required=True, help="Host FASTQ file (R1)")
     parser_stat_split.add_argument("--graft", required=True, help="Graft FASTQ file (R1)")
+    parser_stat_split.add_argument("--sample_name", required=True, help="Sample name for statistics")
+    parser_stat_split.add_argument("--xengsort_prefix", help="Prefix for xengsort output files (optional)")
 
     # Subcommand: xengsort-index
     parser_xengsort_index = subparsers.add_parser("xengsort-index", help="Build xengsort index from converted reference FASTA files")
@@ -661,6 +762,16 @@ if __name__ == "__main__":
     parser_restore.add_argument("--out", required=True, help="Output FASTQ file with restored sequences (read 1)")
     parser_restore.add_argument("--read2", help="Input FASTQ file with ORIGINAL_SEQ in header (read 2, optional)")
     parser_restore.add_argument("--out2", help="Output FASTQ file with restored sequences (read 2, optional)")
+
+    # Subcommand: parse-xengsort-summary
+    parser_xengsort_summary = subparsers.add_parser("parse-xengsort-summary", help="Parse xengsort summary and output classification statistics as CSV")
+    parser_xengsort_summary.add_argument("--xengsort_summary", required=True, help="xengsort summary file")
+    parser_xengsort_summary.add_argument("--outfile", required=True, help="Output CSV file")
+
+    # Subcommand: parse-xengsort-log-table
+    parser_xengsort_log_table = subparsers.add_parser("parse-xengsort-log-table", help="Parse xengsort log vertical table and output as CSV")
+    parser_xengsort_log_table.add_argument("--logfile", required=True, help="xengsort log file")
+    parser_xengsort_log_table.add_argument("--outfile", required=True, help="Output CSV file")
 
     args = parser.parse_args()
 
@@ -710,7 +821,11 @@ if __name__ == "__main__":
             build=args.bbsplit_index_build
         )
     elif args.command == "stat-split":
-        stat_split(args.raw, args.host, args.graft)
+        stat_split(args.raw, 
+                   args.host, 
+                   args.graft, 
+                   getattr(args, "xengsort_prefix", None), 
+                   sample_name=args.sample_name)
     elif args.command == "xengsort-index":
         used_params = [
             "-H", "--host", "-G", "--graft", "-n", "--nobjects", "--fill", "--statistics", "--stats", "-k", "--kmersize", "--index"
@@ -733,4 +848,6 @@ if __name__ == "__main__":
         run_xengsort_classify(args)
     elif args.command == "restore-fastq":
         restore_fastq_from_xengsort(args.read, args.out, args.read2, args.out2)
+    elif args.command == "parse-xengsort-summary":
+        parse_xengsort_summary_table(args.xengsort_summary, args.outfile)
 
