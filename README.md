@@ -51,18 +51,31 @@ python methXsort.py convert-reads --read <R1.fastq.gz> [--read2 <R2.fastq.gz>] [
 - `--with_orig_seq`: Store the original sequence in the header (slower, but traceable).
 
 
+#### Classify Reads with xengsort
+
+```bash
+python methXsort.py xengsort-classify --read <R1.fastq.gz> [--read2 <R2.fastq.gz>] --index <index_dir> --out_prefix <prefix> --threads <N> [--xengsort_path <path>] [--xengsort_extra <extra>]
+```
+
+Output: 
+
+* {prefix}.host.1.fq.gz: host reads
+
+* {prefix}.graft.1.fq.gz: graft reads
+
+* {prefix}.both.1.fq.gz: reads that could originate from both
+
+* {prefix}.neither.1.fq.gz: reads that originate from neither host nor graft
+
+* {prefix}.ambiguous.1.fq.gz: (few) ambiguous reads that cannot be classified,
+
+
 ####  Split Statistics
 
 Output CSV statistics for split reads:
 
 ```bash
 python methXsort.py stat-split --raw <raw_R1.fastq.gz> --host <host_R1.fastq.gz> --graft <graft_R1.fastq.gz>
-```
-
-#### Classify Reads with xengsort
-
-```bash
-python methXsort.py xengsort-classify --read <R1.fastq.gz> [--read2 <R2.fastq.gz>] --index <index_dir> --out_prefix <prefix> --threads <N> [--xengsort_path <path>] [--xengsort_extra <extra>]
 ```
 
 #### Restore FASTQ from xengsort Output
@@ -85,7 +98,6 @@ python methXsort.py restore-fastq --read <classified_R1.fq.gz> --out <restored_R
 
 2. **Build bbsplit and xengsort indices:**
     ```bash
-    python methXsort.py bbsplit-index --host mm10_converted.fa --graft hg38_converted.fa --host_name mm --graft_name hs
     python methXsort.py xengsort-index --host mm10_converted.fa --graft hg38_converted.fa --index xengsort_index_7B
     ```
 
@@ -96,7 +108,6 @@ python methXsort.py restore-fastq --read <classified_R1.fq.gz> --out <restored_R
 
 4. **Run bbsplit or xengsort:**
     ```bash
-    python methXsort.py bbsplit --read sample_R1.meth.gz --read2 sample_R2.meth.gz --host mm --graft hs --out_host host.bam --out_graft graft.bam
     python methXsort.py xengsort-classify --read sample_R1.meth.gz --read2 sample_R2.meth.gz --index xengsort_index_7B --out_prefix sample_xengsort --threads 8
     ```
 

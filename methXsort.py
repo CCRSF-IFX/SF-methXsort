@@ -440,21 +440,36 @@ def fastq_count(filename):
     n_lines = int(subprocess.check_output(cmd, shell=True).decode().strip())
     return n_lines // 4
 
-def stat_split(raw_fastq, host_fastq, graft_fastq):
+def stat_split(raw_fastq, host_fastq, graft_fastq, xengsort_prefix=None, sample_name=None):
     """
     Output CSV with sample name, raw read number, host read number, graft read number, percent graft.
-    Uses fastq_count for efficient counting.
+    If xengsort_prefix is provided, also count both/neither/ambiguous reads from xengsort output.
     """
     import os
-
-    sample_name = os.path.basename(raw_fastq).split('_')[0]
     n_raw = fastq_count(raw_fastq)
     n_host = fastq_count(host_fastq)
     n_graft = fastq_count(graft_fastq)
     percent_graft = (n_graft / n_raw * 100) if n_raw else 0
 
-    print("Sample_name,raw_read_number,host_read_number,graft_read_number,percent_graft")
-    print(f"{sample_name},{n_raw},{n_host},{n_graft},{percent_graft:.2f}")
+    print("Sample_name,raw_read_number,host_read_number,graft_read_number,percent_graft", end="")
+    if xengsort_prefix:
+        print(",both_read_number,neither_read_number,ambiguous_read_number")
+    else:
+        print()
+
+    print(f"{sample_name},{n_raw},{n_host},{n_graft},{percent_graft:.2f}", end="")
+
+    if xengsort_prefix:
+        def count_xengsort_reads(suffix):
+            fname = f"{xengsort_prefix}-{suffix}.1.fq.gz"
+            return fastq_count(fname) if os.path.exists(fname) else "NA"
+
+        n_both = count_xengsort_reads("both")
+        n_neither = count_xengsort_reads("neither")
+        n_ambiguous = count_xengsort_reads("ambiguous")
+        print(f",{n_both},{n_neither},{n_ambiguous}")
+    else:
+        print()
 
 def filter_fastq_by_bam(read, bamfile, out, filterbyname_path="filterbyname.sh", read2=None, out2=None):
     """
@@ -632,6 +647,8 @@ if __name__ == "__main__":
     parser_stat_split.add_argument("--raw", required=True, help="Raw FASTQ file (R1)")
     parser_stat_split.add_argument("--host", required=True, help="Host FASTQ file (R1)")
     parser_stat_split.add_argument("--graft", required=True, help="Graft FASTQ file (R1)")
+    parser_stat_split.add_argument("--sample_name", required=True, help="Sample name for statistics")
+    parser_stat_split.add_argument("--xengsort_prefix", help="Prefix for xengsort output files (optional)")
 
     # Subcommand: xengsort-index
     parser_xengsort_index = subparsers.add_parser("xengsort-index", help="Build xengsort index from converted reference FASTA files")
@@ -710,7 +727,11 @@ if __name__ == "__main__":
             build=args.bbsplit_index_build
         )
     elif args.command == "stat-split":
-        stat_split(args.raw, args.host, args.graft)
+        stat_split(args.raw, 
+                   args.host, 
+                   args.graft, 
+                   getattr(args, "xengsort_prefix", None), 
+                   sample_name=args.sample_name)
     elif args.command == "xengsort-index":
         used_params = [
             "-H", "--host", "-G", "--graft", "-n", "--nobjects", "--fill", "--statistics", "--stats", "-k", "--kmersize", "--index"
