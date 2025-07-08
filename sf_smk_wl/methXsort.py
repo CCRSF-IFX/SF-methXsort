@@ -14,6 +14,8 @@ import shlex
 import pathlib
 import re
 
+__version__ = "0.1.0"
+
 def wrap(seq, width=60):
     return [seq[i:i+width] for i in range(0, len(seq), width)]
 
