@@ -1,6 +1,6 @@
-import ez_setup
-import sys
-ez_setup.use_setuptools()
+# import ez_setup
+# import sys
+# ez_setup.use_setuptools()
 from setuptools import setup
 
 # from mpld3
