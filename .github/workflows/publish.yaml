@@ -3,8 +3,10 @@ name: publish methxsort package
 
 on:
   push:
+    branches:
+      - main
     tags:
-      - 'v*'  # Triggers on version tags like v1.0.0
+      - 'v*.*.*'
   release:
     types: [published]  # Triggers when a new release is published on GitHub
 
