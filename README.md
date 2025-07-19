@@ -2,9 +2,9 @@
 
 **methXsort** is a command-line toolkit for sorting bisulfite sequencing reads into host species and graft species in xenograft experiments. 
 
-MethXsort supports both `xengsort` and `bbsplit` for sorting reads into host and graft species. We recommend `xengsort`, as it is much faster based on benchmarking results.
+MethXsort supports both `xengsort` and `bbsplit` for sorting reads into host and graft species. We recommend `xengsort`, as it is accurate and much faster based on benchmarking results.
 
-<img src="docs/methXsort_flowchart.png" width="300">
+<img src="docs/methXsort_flowchart.png" width="400">
 
 ---
 
