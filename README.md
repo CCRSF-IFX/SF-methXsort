@@ -4,7 +4,7 @@
 
 MethXsort supports both `xengsort` and `bbsplit` for sorting reads into host and graft species. We recommend `xengsort`, as it is much faster based on benchmarking results.
 
-![](docs/methXsort_flowchart.png)
+![](docs/methXsort_flowchart.png width=100)
 
 ---
 
