@@ -10,10 +10,10 @@ MethXsort supports both `xengsort` and `bbsplit` for sorting reads into host and
 
 ## Installation
 
-Clone this repository and ensure all dependencies (Python 3, `pysam`, `toolshed`, `gzip`, and required external tools like `bbsplit.sh`, `filterbyname.sh`, and `xengsort`) are available in your environment.
+Clone this repository and ensure all dependencies (Python 3, `pysam`, `toolshed`, and `xengsort`) are available in your environment.
 
 ```bash
-git clone <repo_url>
+git clone https://github.com/CCRSF-IFX/SF-methXsort.git
 cd methXsort
 ```
 
